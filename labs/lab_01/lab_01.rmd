@@ -1,0 +1,90 @@
+---
+title: "lab_01"
+author: "Madi Eades"
+date: "2025-02-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Turn off scientific notation
+options(scipen=999)
+```
+
+## About this lab
+
+To complete this lab, you need to: \* run existing code as directed (look for **Task**). \* modify existing code as directed (look for **Task**). \* write code in empty codeblocks provided to answer questions included (look for **Q**). \* write out the answer in the form of a complete sentence in the space given (look for **A**). When you are finished, commit changes and push to your personal GitHub repo, then submit the URL to this document on ELMS.
+
+Remember to add any new verbs or concepts to your class reference notebook!
+
+## Load libraries and establish settings
+
+**Task** Run the codeblock below to load the Tidyverse. To run the codeblock, hit the little green play button in the upper right corner of the gray area (the codeblock) below.
+
+```{r}
+# Load the tidyverse. If you have not installed the tidyverse already, remove the # from the next line and run it first.  
+# install.packages('tidyverse')
+library(tidyverse)
+```
+
+## Load Data
+
+We're going to load the Maryland churches data and the megachurches data.
+
+**Task** Run the codeblock below to load the data, which is contained in CSV files.
+
+```{r}
+md_churches <- read_csv("churches_md.csv")
+megachurches <- read_csv("megachurches.csv")
+```
+
+## Answer questions
+
+**Q1** Which NTEE classification code (the NTEE_CD column) has the most churches in Maryland? Show the classification codes (you can find out what they mean here: https://www.irs.gov/pub/irs-soi/eo-info.pdf) with the highest count first. Is this result useful? Why or why not? **A1** The classification code that has the second most churches in Maryland is X20, which refers to Christianity, with 2140 churches. The number with the most churches is 3217; however, there is not a classification code for this category. This result is not useful because it is not determined what N/A means; therefore, we do not get a full picture of all of the Maryland churches and each classification code.  
+
+```{r} 
+md_churches |>
+  group_by(NTEE_CD) |>
+  summarise(
+    count = n()
+  ) |>
+arrange(desc(count))
+```
+
+**Q2** Find out which denomination has the greatest average (mean) size for its megachurches. Your code must show the denomination with the greatest average size first. The denomination with the greatest average sizie for its megachurches is evangelical covenant denomination. 
+
+```{r}
+megachurches |>
+  group_by(denomination) |> 
+  summarise(mean_size = mean(size) 
+  ) |>
+  arrange(desc(mean_size))
+```
+
+**Q3** Count the number of megachurches for each state and city combination. Which state/city combination has the most megachurches? Which city is the most surprising, and why? **A3** The state and city combination with the most megachurches is Houston, TX with 37 churches in the area. The most surprising city to me is Louisville, Ky having 10 megachurches over a city like San Diego, which has 7 megachurches. As a resident of Kentucky, I am very surprised that Louisville is in the top 20 cities with higher counts of megachurches - I did not think that my state would rank this high. 
+
+```{r}
+megachurches |>
+  group_by(state, city) |>
+summarise(
+    count = n()
+  ) |>
+  arrange(desc(count))
+```
+
+**Q4** Given the results for Q3, what's a story that you could tell with this information? Think broadly, and consider what additional information you might need to make your story stronger. You also should think about what cities and states aren't in the results. **A4**
+
+One story idea is that Texas has the highest concentration of megachurches in the US with the top three spots of the results being from Houston, Dallas and Austin. Though this would not be the most interesting story since it could be assumed that larger cities in the south show higher numbers of megachurches; it would be interesting to see why a city like Los Angeles only has 14 megachurches even though it has a higher population than Houston. 
+
+**Q5** Take one of the questions you listed in the final question of the pre_lab and try to answer it here in code. If you don't know how to fully answer it, write what code you can and describe in words what else you would need to do. If you got an answer, is it interesting? **A5** 
+
+For my prelab question, I asked what is the most common denomination per state. To find the answer, I grouped by state and denomination, then used the summarise code to count the total amount of churches under a specific denomination and once this was complete I used the arrange code line and put the outcome in descending order to find the top number. If I could, I would arrange the states individually by their denomination count. I think what is most interesting about the results of my code is that there are 10/20 megachurches that are independent/nondenominational. This could suggest that churches are straying away from the common church denominations and basing more of their practices on what is applicable to them. 
+
+```{r}
+megachurches |>
+  group_by(state , denomination) |>
+  summarise(
+    count = n()
+  ) |>
+arrange(desc(count))
+```
