@@ -1,0 +1,403 @@
+---
+title: "pre_lab_02.Rmd"
+author: "Madison Eades"
+date: "2026-02-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## This week's topics
+
+-   Using filter() to find specific records
+-   Using select() to see only certain columns
+-   Using lubridate to work with dates
+-   Using mutate() to add and update columns
+-   Using case_when() to conditionally populate columns
+
+### Task 1: Load libraries
+
+**Task** Run the following code in the gray-colored codeblock below -- not in the console -- to load the tidyverse library. To run the code, click the little green play button (left facing arrow) at the top right of the codeblock. In Rmarkdown data notebooks, we write code inside of codeblocks, and explanatory text in the white area outside of it.
+
+```{r}
+# turn off sci notation
+options(scipen=999)
+library(tidyverse)
+library(lubridate)
+```
+
+### Task 2: Load data
+
+**Task** Load the Maryland churches data by running the following codeblock. NOTE: it's now located in a `data` folder.
+
+```{r}
+md_churches <- read_csv("data/churches_md.csv")
+```
+
+### Task 3: Glimpse data
+
+**Task** Run the following codeblock to use summary() and colnames() to get a sense of the data and the data types of each field/variable/column. Add a description of what these do to your reference notebook.
+
+```{r}
+summary(md_churches)
+colnames(md_churches)
+```
+
+## Filter and Select
+
+More often than not, we have more data than we want. Sometimes we need to be rid of that data. In the tidyverse, there's two ways to go about this: filtering and selecting.
+
+**Filtering creates a subset of the data based on criteria**. All records where the church is in zip code 20906. All records where the city is "COLLEGE PARK". Something like that. **Filtering works with rows -- when we filter, we get fewer rows back than we start with.**
+
+**Selecting simply returns only the fields named**. So if you only want to see the name and address of a church, you select those fields. When you look at your data again, you'll have two columns. If you try to use one of your columns that you had before you used select, you'll get an error. **Selecting works with columns. You will have the same number of records when you are done, but fewer columns of data to work with.**
+
+### Task 4: Filter by one column
+
+**Task** Run the following code to limit independent churches
+
+```{r}
+md_churches_indy <- md_churches |> filter(AFFILIATION == 3)
+
+head(md_churches_indy)
+```
+
+And just like that, we have just College Park results, which we can verify looking at the head, the first six rows. We also could filter by a numeric column like `AFFILIATION`, so we could see just churches that are independent (have a value of 3, according to [the IRS code book](https://www.irs.gov/pub/irs-soi/eo-info.pdf)):
+
+**Task** Run the following code to limit our courses to those in terms in 2025:
+
+```{r}
+md_churches_indy <- md_churches |> filter(AFFILIATION == 3)
+
+head(md_churches_indy)
+```
+
+### Task 5: Select
+
+We also have more columns than we might want. For example, we may only want to work with the course id and title.
+
+To simplify our dataset, we can use select.
+
+**Task** Run the following code to select only certain columns
+
+```{r}
+selected_churches <- md_churches |> select(NAME, ACTIVITY)
+
+head(selected_churches)
+```
+
+And now we only have two columns of data for whatever analysis we might want to do. Describe the 6th church in this result.
+
+**Answer** Using select(Name,Activty), the sixth church listed is the Chesapeake Presbytary, with an activity code of 001000000. According to the IRS document, the activity code refers to an organization's purpose, activities, operations or type. From what I can understand, the activity code for the Chesapeake Presbytery means that it is categorized by the type of space, such as a church or synagogue. 
+
+### Task 6: Combining filters
+
+So let's say we wanted to see all the churches in College Park that are independent - in other words, that aren't affiliated with a larger denomination. The data we have comes from the Internal Revenue Service and has a [code book](https://www.irs.gov/pub/irs-soi/eo-info.pdf) describing the values of the columns. The AFFILIATION column says that a code of 3 means independent. We can do this a number of ways. The first is we can chain together a whole lot of filters.
+
+**Task** Run the following code
+
+```{r}
+cp_churches_ind <- md_churches |> filter(CITY == "COLLEGE PARK") |> filter(AFFILIATION == 3)
+
+nrow(cp_churches_ind)
+```
+
+That gives us 28 records But that's repetitive, no? We can do better using a single filter and boolean operators -- AND and OR. In this case, AND is `&` and OR is `|`.
+
+The difference? With AND, all conditions must be true to be included. With OR, any of those conditions things can be true and it will be included.
+
+**Task** Run the following code
+
+```{r}
+cp_churches_ind <- md_churches |> filter(CITY == "COLLEGE PARK" & AFFILIATION == 3)
+
+nrow(cp_churches_ind)
+```
+
+So AND gives us the same answer we got before. What does using the OR operator give us?
+
+**Task** Run the following code and put the number of results below.
+
+```{r}
+cp_churches_ind <- md_churches |> filter(CITY == "COLLEGE PARK" | AFFILIATION == 3)
+
+nrow(cp_churches_ind)
+```
+
+**Answer** The OR operator gives us anything that is true from both College Park and Affiliation == 3. In other words, if a church is in college park, it will be included, and if it has an affiliation value of 3, it will also be included in the list. All churches that meet either condition will be included. 
+
+When it comes to filters, OR is additive; AND is restrictive.
+
+### Task 7: Filter on partial match
+
+Sometimes you need to find rows that contain a certain pattern rather than an exact match - like if you're looking for all of the churches with "Baptist" in the name There are several ways to do this using R, but one way is to use the function `str_detect`, which stands for "string detect". You use it inside a `filter` by supplying the column and the pattern you want to match, like so:
+
+**Task** Run the following code
+
+```{r}
+md_churches |>
+  filter(str_detect(NAME, "BAPTIST"))
+```
+
+**Task** Now you try: come up with a search term and plug it into the code block below, then tell me why you picked that term:
+
+```{r}
+md_churches |>
+  filter(str_detect(ZIP, "20904"))
+```
+
+**Answer** I chose to use the search term 20904, which is the first five digits of one of the Silver Spring zip codes, which is a city in Prince George's County. 
+
+The latest version of the tidyverse also has a function called `str_like` which uses the wildcard search operator % to do partial matching.
+
+A general tip about using filter: it's easier to work your way towards the filter syntax you need in steps rather than try and write it once and trust the result. Each time you modify your filter, check the results to see if they make sense. This adds a little time to your process but you'll thank yourself for doing it because it helps avoid mistakes. Note that whatever you're trying to match using `filter` - whether an exact match or a partial one - R is case-sensitive by default. Go back and try the previous block, changing the pattern to "Baptist" to see this.
+
+## Dates
+
+The key to working with dates is that R needs to know that the column containing the date has a datatype of date (or datetime for timestamps). Regular R will guess, and the tidyverse will make a better guess.
+
+Let's start with a dataset of campaign expenses from Maryland political committees:
+
+```{r}
+maryland_expenses <- read_csv("data/md_church_expenditures.csv")
+
+head(maryland_expenses)
+```
+
+Scroll to the right until you see the `Transaction Date` column. It *looks* like a date, but see the `<chr` right below the column name? That means R thinks it's actually a character column. What we need to do is make it into an actual date column, which lubridate is very good at doing. It has a variety of functions that match the format of the data you have. In this case, the current format is `m/d/y`, and the lubridate function is called `mdy` that we can use with mutate:
+
+### Task 8: Turning a character date into a real date
+
+**Task** Run the following code and describe the change in the `Transaction Date` column. How does it look now compared to before?
+
+```{r}
+maryland_expenses <- maryland_expenses |> mutate(`Transaction Date`=mdy(`Transaction Date`))
+
+head(maryland_expenses)
+```
+
+**Answer:** Now, the transaction date is now transformed into <date> rather than <chr>. Prior to the change, the dates looked like 1-06-26, now the transaction date is turned into a datatype that reads the date correctly (2026-01-06). 
+
+Lubridate has functions for basically any type of character date format: mdy, ymd, even datetimes like ymd_hms.
+
+That's less code and less weirdness, so that's good.
+
+But to get clean data, I've installed a library and updated a column so I can now start to work with my dates. That seems like a lot, but don't think your data will always be perfect and you won't have to do these things.
+
+Still, there's got to be a better way. And there is.
+
+Fortunately, `readr` anticipates some date formatting and can automatically handle many of these issues (indeed it uses lubridate under the hood). When you are importing a CSV file, be sure to use `read_csv`, not `read.csv`.
+
+### Task 9: Creating a new date column from existing dates using mutate
+
+But you're not done with lubridate yet. It has some interesting pieces parts we'll use elsewhere.
+
+For example, in spreadsheets you can extract portions of dates - a month, day or year - with formulas. You can do the same in R with lubridate. Let's say we wanted to add up the total amount spent in each month in our Maryland expenses data.
+
+We could use formatting to create a Month field but that would group all the Aprils ever together. We could create a year and a month together, but that would give us an invalid date object and that would create problems later. Lubridate has something called a floor date that we can use.
+
+So to follow along here, we're going to use a new function, `mutate`, to create a month field, group by to lump them together, summarize to count them up and arrange to order them. We're just chaining things together. Mutate is the key here because it allows us to create a new column from existing data.
+
+**Task** Run the following code
+
+```{r}
+maryland_expenses |>
+  mutate(month = floor_date(`Transaction Date`, "month")) |>
+  group_by(month) |>
+  summarise(total_amount = sum(`Transaction Amount`)) |>
+  arrange(desc(total_amount))
+```
+
+So the month of August 2022 had the most expenditures in this data.
+
+Describe the values in the new `month` column - what do you think is going on there?
+
+Using the floor_date function, the values in the new month column is a consolidated list of all of the dates listed from the transaction date column by each month and year. Therefore, the function puts all of the dates together and lists them by year first, then the month and since it is a consolidated list of every date of each month, the day is set to the first of each month.  
+
+# Mutating data
+
+Often the data you have will prompt questions that it doesn't immediately answer. Religious affiliation data, for example, might have raw counts of priests and parishes but we often don't use those to make comparisons across time periods unless the numbers are small. We need ratios and percentages!
+
+To do that in R, we can use `dplyr` and `mutate` to calculate new metrics in a new field using existing fields of data. That's the essence of `mutate` - using the data you have to answer a new question.
+
+So first we'll import the tidyverse so we can read in our data and begin to work with it.
+
+```{r}
+#| output: false
+library(tidyverse)
+```
+
+### Task 10: Mutate
+
+Often the data you have will prompt questions that it doesn't immediately answer. Religious affiliation data, for example, might have raw counts of priests and parishes but we often don't use those to make comparisons across time periods unless the numbers are small. We need ratios and percentages!
+
+First, we'll import a dataset of Catholic Church statistics from selected years that is in the data folder in this chapter's pre-lab directory. We'll use this to explore ways to create new information from existing data.
+
+**Task**
+```{r}
+cara_stats <- read_csv('data/cara.csv')
+```
+
+Let's add a column called `catholics_per_parish` to calculate how many Catholics there are for each parish in each year. This helps us understand how parish size and resource distribution have changed over time. The code to calculate a ratio is pretty simple. Remember, with `summarize`, we used `n()` to count things. With `mutate`, we use very similar syntax to calculate a new value -- a new column of data -- using other values in our dataset.
+
+To calculate this ratio, we need both the Catholic population and the number of parishes. We'll use mutate to create the new column. The key here is to save the dataframe to itself so that our changes stick.
+
+**Task** Let's add a new column based on existing columns. Run the following code to create a new column called `catholics_per_parish` based on the Catholic population and number of parishes.
+
+```{r}
+cara_stats <- cara_stats |>
+  mutate(
+    catholics_per_parish = catholic_population / parishes
+  )
+```
+
+Describe what you think this code is doing below.
+
+First, the code line "cara_stats" <- cara_stats is to update the original dataset with the information that follows |>. Then, mutate creates a new column and takes the catholic population divided by the total number of parishes to calculate "catholics_per_parish."   
+
+### Task 11: Better ratio calculation
+
+**Task** Run the following code to make our new column called `catholics_per_parish` show a whole number instead of a decimal.
+
+```{r}
+# make it a whole number
+cara_stats <- cara_stats |>
+  mutate(
+    catholics_per_parish = round(catholic_population / parishes, 0)
+  )
+```
+
+### Task 12: Mutate with ordering
+
+**Task** Run the following code to order by our new column.
+
+```{r}
+cara_stats <- cara_stats |>
+  mutate(
+    catholics_per_parish = round(catholic_population / parishes, 0)
+  ) |> 
+  arrange(desc(catholics_per_parish))
+```
+
+How did the answer change from the previous task, and why?
+
+**Answer** In the previous task, the codeblock only rounded each total for catholics per parish to the nearest whole number using round(catholic_population / parishes, 0). In this codeblock, the same thing is done, but this time arrange(desc(catholics_per_parish)) was added to the codeblock to arrange each total from highest to lowest. 
+
+### Task 13: Mutate with ordering, part 2
+
+**Task** Run the following code to order by our new column, but in ascending order.
+
+```{r}
+# better ordering
+cara_stats |>
+  arrange(catholics_per_parish)
+```
+
+
+### Task 14: Adding multiple calculations
+
+We can also add multiple calculations at once. Let's calculate both the Catholics per parish and the percentage of parishes without a resident priest.
+
+**Task** Run the following code to create two new columns and arrange by the percentage of parishes without a resident priest.
+
+```{r}
+cara_stats <- cara_stats |>
+  mutate(
+    catholics_per_parish = round(catholic_population / parishes, 0),
+    pct_no_resident_priest = (parishes_without_resident_priest / parishes) * 100
+  ) |> 
+  arrange(desc(pct_no_resident_priest))
+```
+
+What story does this data tell about how the Catholic Church in the U.S. has changed over time?
+
+**Answer** This data shows that the highest percentage of parishes without a resident priest was in 2024 with 21.3% and the lowest percentage in 1965 with nearly 3%. This tells us that over time the number of resident priests has decreased within parishes, which could suggest a larger decline in traditional catholic practices.  
+
+### Task 15: Standardize existing data using mutate
+
+Mutate is also useful for standardizing data - for example, making different spellings of, say, campaign spending recipients.
+
+Let's load our Maryland campaign expenditures involving churches into a dataframe and focus in particular on the `payee_name` column.
+
+**Task** Run the following code:
+
+```{r}
+church_expenses <- read_csv("data/md_church_expenditures.csv")
+church_expenses
+```
+
+You'll notice that the payee names have a mix of styles: title case, upper case and lower case. For example, you might see "First Baptist Church of Baltimore", "FIRST BAPTIST CHURCH OF BALTIMORE", and "first baptist church of baltimore". R will treat these as three different payees, and that will mean that any aggregates we create based on payee_name won't be accurate.
+
+So how can we fix that? Mutate - it's not just for math! And a function called `str_to_upper` that will convert a character column into all uppercase.
+
+**Task** Run the following code:
+
+```{r}
+standardized_church_expenses <- church_expenses |>
+  mutate(
+    payee_upper = str_to_upper(`Payee Name`)
+  )
+```
+
+**Task** Search the Internet for tidyverse functions similar to str_to_upper. Name at least two and describe what they do. If you use an AI chatbot like ChatGPT or Claude for this, include the question you submitted.
+
+**Answer** From my research, another similar function to str_to_upper is the function str_to_title, which makes each first letter of a word uppercase. A second similar function is str_to_sentence, which will capitalize the first word of a sentence. 
+
+There are lots of potential uses for standardization - addresses, zip codes, anything that can be misspelled or abbreviated.
+
+### Task 16: Create a new column using case_when
+
+Mutate is even more useful when combined with some additional functions. Let's keep rolling with our church expenditure data. Take a look at our new `payee_upper` column: it contains the name of the recipient. It would be useful to have a separate `denomination` column indicating what sort of church it is. We can check to see if a denomination name is contained in that column and then populate a new column with the value we want, using the functions `str_detect` and `case_when`. The `case_when` function handles multiple variations, such as if a payee contains "BAPTIST" or "CATHOLIC", etc. Crucially, we can tell R to populate the new column with `NA` if it doesn't find a match.
+
+**Task** Run the following code and look at the output. Then write a sentence or two describing what you think the mutate statement is doing step by step.
+
+```{r}
+standardized_church_expenses <- standardized_church_expenses |>
+  mutate(
+    denomination = case_when(
+        str_detect(payee_upper, "BAPTIST") ~ "Baptist",
+        str_detect(payee_upper, "CATHOLIC") ~ "Catholic",
+        str_detect(payee_upper, "METHODIST") ~ "Methodist",
+        str_detect(payee_upper, "PRESBYTERIAN") ~ "Presbyterian",
+        str_detect(payee_upper, "LUTHERAN") ~ "Lutheran",
+        str_detect(payee_upper, "EPISCOPAL") ~ "Episcopal",
+        str_detect(payee_upper, "AME") ~ "AME",
+        str_detect(payee_upper, "TEMPLE") ~ "Jewish",
+        .default = NA
+      )
+  )
+```
+
+In this code block, it seems that the case_when is finding anything that has "BAPTIST" under the column payee_upper. Then, once the word is detected by the str_detect, the estimation sign assigns the word to the specific denomination within the quotation marks. 
+
+There's a lot going on here, so let's unpack it. It starts out as a typical mutate statement, but `case_when` introduces some new things. Each line checks to see if the pattern is contained in the `payee_upper` column, followed by `~` and then a value for the new column for records that match that check. You can read it like this: "If we find 'BAPTIST' in the payee_upper column, then put 'Baptist' in the denomination column", and so on for other denominations, and if we don't match any word we're looking for, make denomination `NA`.
+
+We can then use our new `denomination` column in group_by statements to make summarizing easier.
+
+**Task** Run the following code:
+
+```{r}
+standardized_church_expenses |>
+  group_by(denomination) |>
+  summarize(total = sum(`Transaction Amount`)) |>
+  arrange(desc(total))
+```
+
+Does this answer make sense to you? Why or why not?
+
+**Answer** The top answer does make sense to me since Baptist are more known for their conservative values and teachings, which could suggest they are willing to spend more on Republican campaigns in Maryland elections. 
+
+Mutate is there to make your data more useful and to make it easier for you to ask more and better questions of it.
+
+### Task 17: More questions
+
+Now that you have seen how to use mutate, filtering and dates, give me three questions about either the Catholic church data or the Maryland church expenditure data that you could ask that would make use of some or all of those new functions. They can be better versions of the questions from the previous pre-lab.
+
+**Answer**
+
+1. Which categories of payment do Maryland churches spend the most on?   
+
+2. Do certain cities have more payees than others? 
+
+3. What committee type pays the most in expidentures?   
