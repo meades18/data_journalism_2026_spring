@@ -1,0 +1,112 @@
+---
+title: "lab_02"
+author: "Madison Eades"
+date: "2026-01-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries and establish settings
+
+```{r}
+# Turn off scientific notation
+options(scipen=999)
+
+library(tidyverse)
+library(lubridate)
+```
+
+## Load Data
+
+Let's keep working with the Maryland churches data and the Maryland campaign expenses data we used in the pre_lab. Write code to load those two CSV files from the data folder.
+
+```{r}
+churches_md <- read_csv("data/churches_md.csv")
+md_expenditures <- read_csv("data/md_church_expenditures.csv")
+```
+
+## Answer questions
+
+**Q1.** How many churches in Maryland have "ORTHODOX" in their name? Which cities have the most churches with "ORTHODOX" in the name, and how does that compare to city totals for all churches in Maryland?
+
+**A1.** There are 30 churches in Maryland that have orthodox in their name, with Baltimore and Silver Spring having the most at 5. Compared to the city total in Baltimore, at 1258, which is drastically larger than the number of churches with Orthodox in the name. 
+
+```{r}
+orthodox_md <- churches_md |> 
+ filter(str_detect(NAME, "ORTHODOX")) |>
+
+group_by(CITY) |>
+  summarise(
+    count = n()
+  ) 
+
+totals_churches <- churches_md |> 
+  group_by(CITY) |>
+  summarise(
+    count = n()
+  ) |>
+  arrange(desc(count))
+
+```
+
+**Q2.** Of the churches and cities listed in A1, which ones are the most interesting to you, and why? What's a good reporting question you have about them?
+
+**A2.** The most interesting city in this list is Towson, that only has 1 orthodox church. I found this interesting because Towson is ranked in the top 15 highest populated cities in Maryland; however, there is only one church that has orthodox in the name, which could suggest that residents in Towson do not follow traditional religious practices. Another city that only has one church with "orthodox" in the name is Denton, which has an estimated population of 5,000 residents. My question that I would ask based on this is: what does the lack of orthodox churches in a highly populated city, such as Towson, suggest about the trends of traditional religious practices over time? I understand that Baltimore, Silver Springs and Bethesda all have 3 or more churches with orthodox in the name; however, I do think it is interesting that a well-known city, like Towson, only lists one church in the area with orthodox in the name and it could suggest a decline in overall popularity of orthodox churches. 
+
+**Q3** The campaign expense data contains payments to churches in Maryland. Write code that finds only those payments made to churches by party central committees (there are a couple of ways to do this, but one simple way). Then write code to find which party committee spent the most total dollars and how much did they spend? **A3.** 
+
+```{r}
+party_expenditure <- md_expenditures |> filter(`Committee Type` == "Party Central")  
+  
+  md_expenditures |> group_by(`Committee Type`) |>
+  summarise(total_amount = sum(`Transaction Amount`)) |>
+  arrange(desc(total_amount))
+```
+
+**Q4.** Using the same Maryland campaign expenses data, change the datatype of the `Transaction Date` column so that it is a date and not a chr, saving the result as the same dataframe. Then create a new column for the week based on `Transaction Date` using the `week()` function (representing the week of the year). Then write code that shows the total amount spent each week using that new column. Write a sentence describing the pattern of spending over time - when has there been more spending and when has there been less? **A4.**
+
+Looking at the data, it seems there has been less spending during the oof-years of elections, so 2021 and 2023. However, this is not the case for 2025, in which there was a 2566$ expenditure in November. Other than the 2025 expenditure, the spending seems to align with election years, with the highest spending in 2022. 
+
+
+```{r}
+maryland_expenses <- md_expenditures |> mutate(`Transaction Date`=mdy(`Transaction Date`)) 
+
+  maryland_expenses |>
+  mutate(week= floor_date(`Transaction Date`, "week")) |>
+  group_by(week) |>
+  summarise(total_amount = sum(`Transaction Amount`)) |>
+  arrange(desc(total_amount))
+```
+
+**Q5.** Using the `md_churches` data, create a column using `mutate()` and `case_when()` that tries to accomplish the same thing we did in the pre_lab - pulling the denomination or faith from church names. This will take longer than the pre_lab because there are more churches in the data, and you should use <https://www.thearda.com/us-religion/census/congregational-membership?y=2020&y2=0&t=1&c=24> as a reference for the most common denominations in Maryland. What you want is to populate your new column with something like the "Family" column on that web page, using "Other" for those you're not able to classify. After creating your new column, write code that shows the top five denominations or faiths by number of churches in Maryland. You won't get all of them, but try to get as many as you can. Do these totals seem accurate to you? Are there denominations or faith groups that are obviously missing? Which one(s)?
+
+**A5** I feel like these totals are not an accurate depiction of the denominations within Maryland. At the bottom of the totals is the catholic denomination, with only 71 churches counted. As we discussed in class, Maryland was founded as a catholic state; therefore, I would expect that the total catholic churches would be higher in the list. I also think it interesting that other is the largest category, which could simply be because the denomination is not listed in the name; however, it could also suggest that churches do not want to fall under a single denomination.
+
+```{r}
+standardized_churches <- churches_md |>
+  mutate(
+    denomination = case_when(
+        str_detect(NAME, "BAPTIST") ~ "Baptist",
+        str_detect(NAME, "CATHOLIC") ~ "Catholic",
+        str_detect(NAME, "METHODIST") ~ "Methodist",
+        str_detect(NAME, "PRESBYTERIAN") ~ "Presbyterian",
+        str_detect(NAME, "LUTHERAN") ~ "Lutheran",
+        str_detect(NAME, "EPISCOPAL") ~ "Episcopal",
+        str_detect(NAME, "AME") ~ "AME",
+        str_detect(NAME, "TEMPLE") ~ "Jewish",
+        str_detect(NAME, "CHRISTIAN") ~ "Christian",
+        .default = "Other"
+      )
+  )
+
+standardized_churches |>
+  group_by(denomination) |>
+  summarise(
+    count = n()
+  ) |>
+  arrange(desc(count))
+
+```
