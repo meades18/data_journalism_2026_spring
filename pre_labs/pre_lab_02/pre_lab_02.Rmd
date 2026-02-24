@@ -401,3 +401,17 @@ Now that you have seen how to use mutate, filtering and dates, give me three que
 2. Do certain cities have more payees than others? 
 
 3. What committee type pays the most in expidentures?   
+
+
+```{r}
+baptist_churches <- md_churches |> 
+  filter(str_detect(NAME, "BAPTIST"))
+  
+```
+
+```{r}
+baptist_churches |> 
+  filter(str_detect(zip5, "20743"))
+```
+
+
