@@ -1,0 +1,112 @@
+---
+title: "lab_04"
+author: "Madison Eades"
+date: "2026-01-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About this lab
+
+To complete this lab, you need to: \* run existing code as directed (look for **Task**). \* modify existing code as directed (look for **Task**). \* write code in empty codeblocks provided to answer questions included (look for **Q**). \* write out the answer in the form of a complete sentence in the space given (look for **A**).
+
+When you are finished, commit changes and push to your personal GitHub repo, then submit the URL to this document on ELMS.
+
+## Load libraries and establish settings
+
+You'll need to load two packages for this: the tidyverse and janitor.
+
+**Task** load these two packages.
+
+```{r}
+# Turn off scientific notation
+options(scipen=999)
+```
+
+For this lab, we want to investigate payments by Maryland state agencies to church-related organizations. For example, we could ask which churches or religious organizations have received the most money from the state? Which state agencies make the most payments to religious organizations? We have the data, but it's messy - names of vendors are spelled differently and capitalized differently - and we need to clean it up. We'll use a combination of RStudio and OpenRefine to do that.
+
+The basic process here is to start in RStudio, export data so that we can use OpenRefine to clean it up, and then bring it back into RStudio to finish our analysis.
+
+## Load Data
+
+You'll need to load one data set, a CSV file of Maryland payments to church-related organizations located in the data folder called "church_payments.csv"
+
+**Task** Create a codeblock below, then read the data in and assign it to an appropriate variable name. You'll want to clean up the column names.
+
+```{r}
+library(tidyverse)
+```
+```{r}
+church_payments <- read_csv("data/church_payments.csv")
+```
+
+## Answer questions
+
+**Q1.** You've been assigned to investigate payments by Maryland state agencies to various religious organizations. There's a vendor_name column in the data, but it has variations in how many of them are listed. You'll need to complete the following steps:
+
+1. Write code to see the leading recipients to get a sense of which organizations you'll want to focus your cleaning efforts on. Keep that handy.
+2. Using OpenRefine, create a project using the original CSV file, create a copy of the `vendor_name` column called `vendor_clean` and then standardize it, focusing on the vendors that appear most often. Pay particular attention to variations of the top recipients, but also clean up other common vendors you notice.
+3. When you are done standardizing `vendor_clean`, export it as a new CSV file to your data folder, *giving it a different name* and read it back into RStudio as a new dataframe.
+4. Using that `vendor_clean` column in your new dataframe, calculate the total amount of payments to the leading recipients. Compare it to the totals you generated in step 2 and describe the differences.
+
+**A1.** The totals for the first codeblock has a few duplicates, including two rows for Associated Catholic Charities, two rows for the Goodwill Mennonite Home and two duplicates of the Augsburg Lutheran Home of Maryland. After putting the dataset through Open Refine, I clustered these categories to be:Assoc Catholic Charities, Goodwill Mennonite Home and Augsburg Lutheran Home. This drastically changed the totals. In the original dataset, Associated Catholic Charities received $434,968,161 and $98,600,953 in payments; once the two rows were clustered this total added up to be $556,513,811. The same can be said for Goodwill Mennonite Home, which originally had $53,154,956 and $4,152,543, and once they were clustered it totaled to be $94,680,395. 
+
+```{r}
+church_payments |>
+  group_by(vendor_name) |>
+  summarise(total = sum(amount)) |> 
+  arrange(desc(total)) 
+```
+```{r}
+cleaned_payments <- read_csv("data/clean-church-payments-csv.csv")
+```
+```{r}
+cleaned_payments |>
+  group_by(vendor_clean) |>
+  summarise(total = sum(amount)) |> 
+  arrange(desc(total)) 
+```
+
+
+
+**Q2.** Let's examine the top recipients of state payments. Using your cleaned dataframe from Q1, for the top 10 organizations, look up what kind of services they provide. Are they churches that run social service programs? Religious-affiliated nonprofits? Care facilities? Write some sentences describing what you found about the top recipients.
+
+**A2.** The first recipient is the Associated Catholic Charities, which provides services to those in need, such as disaster relief, affordable housing, parissh engagement and immigration resources. Since they are first among the list of the top 10 recipients, it could be assumed that the payments they receive go towards these programs and services throughout Maryland. The next top recipient is the Goodwill Mennonite Home, which is a religious-based retirement home in Grantsville, Md. They offer private and semi-private rooms, with 108 beds, and nursing services ranging from light to heavy care. Following the retirement home is the Augsburg Lutheran Home, which is another retirement community located in Baltimore City. The Kennedy Institute of Catholic Community Services is affliliated with the Catholic Charities Education program, which provides non-public day school for children with disabilities. In general, the top recipients of payments from Maryland agencies all fall under the social services category, providing childcare, senior living and education services. 
+
+
+
+**Q3.** Which state agencies have made the most payments to religious organizations? Calculate the total amount paid by each agency (using `agency_name`) and show the top 10 agencies. What do you notice about the agencies making these payments? Why might these particular agencies be paying religious organizations? What could you do to improve the accuracy of the results?
+
+**A3.** The top agencies that made the most payments to religious organizations is the Maryland Department of Health, which is the top four agencies. The department provides support for several services the religious organizations provide, such as  community services. I think that it makes sense that the Department of Health is among the top four agencies to make payments to these religious organizations because they are directly supporting the state's initiatives. One way that I could improve the accuracy of the results is by cleaning up the agency name column by merging all of the variables that are related to the Department of Health in Maryland. This way, it would not have four separate listings all related to the same agency and would have more variety in the variables listed as the top ten agencies. 
+
+```{r}
+cleaned_payments |>
+  group_by(agency_name) |>
+  summarise(total = sum(amount)) |> 
+  arrange(desc(total))
+```
+
+**Q4.** Let's look at the data over time. Using your cleaned dataframe, calculate the total amount paid to religious organizations by fiscal year. Which years saw the highest total payments? Create a sentence or two describing the trend you observe. Then, pick one of the top-spending agencies from Q3 and calculate its yearly payments to religious organizations. How does this agency's spending pattern compare to the overall trend?
+
+**A4.** The years that saw the highest payments were from 2022 to 2025. This could suggest that within the last decade, Maryland agencies have boosted their support for social services through grants and loans made to religious organizations that provide services to Maryland residents. Looking at the Maryland Department of Health, it seems that the payments made by this agency somewhat follow the trend of having higher amounts of spending within the last decade save for 2017, which has the highest payment made. 
+
+```{r}
+cleaned_payments |>
+  group_by(fiscal_year) |>
+  summarise(total = sum(amount)) |> 
+  arrange(desc(total))
+```
+```{r}
+cleaned_payments |> filter(str_detect(agency_name, "MARYLAND DEPARTMENT OF HEALTH")) |> 
+  group_by(fiscal_year) |>
+  summarise(total = sum(amount)) |> 
+  arrange(desc(total))
+
+```
+
+**Q5** Your editor asks you to summarize your findings about Maryland state payments to religious organizations. Based on your analysis, what patterns have you found? What questions does this data raise that you'd want to investigate further through reporting? What's the best story idea you've found here?
+
+**A5** Based on the analysis of the top payments given by state agencies and received by religious organizations, it can be said that the Maryland Department of Health plays a significant role in funding church social services in the state. Specifically, a lot of these services directly benefit the department by supporting its initiatives to support those in need within the state. Some of the questions I have are how do the agencies that make these payments hold religious organizations accountable for successful outcomes, and how do they determine that these payments were used for these services the organizations provide. Another question I have is regarding church and state separation, in which over the course of this class so far, we have seen several government to religious organization payments made. I find this interesting since the Establishment Clause of the First Amendment directly prohibits the establishment of a certain national religion; however, the top recipient is the Associated Catholic Charities. My question surrounds how the Department of Health, and other state agencies, ensure compliance with this clause while also funding religious affiliated social services. My story idea for this would focus on how these payments work, and why the state seems to heavily rely on relgious organizations to provide social services. 
