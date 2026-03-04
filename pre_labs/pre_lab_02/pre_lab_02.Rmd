@@ -411,7 +411,7 @@ baptist_churches <- md_churches |>
 
 ```{r}
 baptist_churches |> 
-  filter(str_detect(zip5, "20743"))
+  filter(str_detect(zip5, "20743")) 
 ```
 
 
