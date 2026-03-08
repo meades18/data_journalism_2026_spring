@@ -1,0 +1,256 @@
+---
+title: "lab_05"
+author: "Madison Eades"
+date: "2026-03-6"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## You will need
+
+-   Tabula
+
+## Load libraries and establish settings
+
+```{r}
+# Turn off scientific notation
+options(scipen=999)
+
+library(tidyverse)
+library(janitor)
+```
+
+## Get Our PDF
+
+We'll be working with a [PDF of denominational adherents with race & ethnicity information where available](http://www.asarb.org/ASARB_RaceEthnicity_Adherents_2022.pdf). You'll want to download it to a place you'll remember (like your Downloads folder, or the labs folder in your repository). The goal is to extract the tables within it, export that to a CSV file, load it into RStudio and ask some questions.
+
+## Extract Data from PDF Using Tabula
+
+Start Tabula, then go to <http://127.0.0.1:8080/> in your browser. Click the "Browse" button and find the PDF file and click "open", and then click the "Import button" in Tabula. This will take a few seconds or longer.
+
+This PDF has a single table to extract. We're going to make a single dataframe from this table, exporting it to a CSV file that you will load into R. In Tabula, highlight the table and click the "Preview & Export Extracted Data" button. You may want to play with including or excluding the column headers - YOU SHOULD HAVE TEN COLUMNS OF DATA.
+
+Save the CSV (it should be called `tabula-ASARB_RaceEthnicity_Adherents_2022.csv` by default) to your lab_05/data folder.
+
+From there, you will need to read in the data, and clean headers if necessary. You can choose to include the headers from the PDF in your exported CSV file OR to exclude them and add them when importing. `read_csv` allows us to do this ([and more](https://readr.tidyverse.org/reference/read_delim.html)).
+
+## Load and clean up the data in R
+
+You will need to read in and clean up the data so that it can be used for analysis. By "clean" I mean the column headers should not contain spaces and they should have meaningful names, not "x1" or something similar. How you do that is up to you, but you can use select() with or without the minus sign to include or exclude certain columns. You also can use the `rename` function to, well, rename columns. You also will need to turn columns that contain numeric values into actual numbers. That might require removing characters and/or converting the column datatypes. Take this part step-by-step, and work carefully, using the pre_lab as your guide. Make sure you save the result to a data frame called `race_adherents`.
+
+```{r}
+race_adherents <- read_csv("tabula-ASARB_RaceEthnicity_Adherents_2022.csv")
+
+race_adherents <- race_adherents |> clean_names() |>
+  rename(membership = name, year = statistical_year, african_american = black_african_american, native_american = native_american_american_indian) 
+
+race_adherents
+```
+```{r}
+race_adherents <- race_adherents |> 
+mutate(asian_pacific_islanders = case_when(
+    asian_pacific_islanders == "-" ~ NA, 
+    .default = asian_pacific_islanders,
+     )) 
+
+race_adherents <- race_adherents |>  
+mutate(african_american = case_when(
+    african_american == "-"  ~ NA,
+    .default = african_american
+    )) 
+
+
+race_adherents <- race_adherents |>  
+mutate(african_american = case_when(
+    african_american == "-"  ~ NA,
+    .default = african_american
+    )) 
+
+race_adherents <- race_adherents |>  
+mutate(native_american = case_when(
+    native_american == "-" ~ NA,
+    .default = native_american
+    ))  
+
+race_adherents <- race_adherents |>
+mutate(hispanic = case_when(
+    hispanic == "-" ~ NA,
+    .default = hispanic 
+     ))  
+
+race_adherents <- race_adherents |>  
+mutate(white = case_when(
+    white == "-" ~ NA,
+    .default = white
+    ))  
+   
+race_adherents <- race_adherents |>
+  mutate(other = case_when(
+    other == "-" ~ NA,
+    .default = other
+)) 
+
+race_adherents <- race_adherents |>
+mutate(reporting = case_when(
+    reporting == "-" ~ NA,
+    .default = reporting
+))
+
+race_adherents
+```
+
+
+
+```{r}
+
+race_adherents <- race_adherents |>
+  mutate(asian_pacific_islanders =
+           as.numeric(str_replace_all(asian_pacific_islanders, ",", "")))
+
+race_adherents <- race_adherents |>
+  mutate(african_american =
+           as.numeric(str_replace_all(african_american, ",", "")))
+
+race_adherents <- race_adherents |>
+  mutate(native_american =
+           as.numeric(str_replace_all(native_american, ",", "")))
+
+race_adherents <- race_adherents |>
+  mutate(hispanic =
+           as.numeric(str_replace_all(hispanic, ",", "")))
+
+race_adherents <- race_adherents |>
+  mutate(white =
+           as.numeric(str_replace_all(white, ",", "")))
+
+race_adherents <- race_adherents |>
+  mutate(other =
+           as.numeric(str_replace_all(other, ",", "")))
+
+race_adherents <- race_adherents |>
+  mutate(reporting =
+           as.numeric(str_replace_all(reporting, ",", "")))
+
+race_adherents
+```
+
+
+
+```{r}
+race_adherents <- race_adherents |>
+  select(membership, asian_pacific_islanders, african_american, native_american, hispanic, white, other, reporting, total_adherents) |>
+    mutate(
+    asian_pacific_islanders = as.numeric(asian_pacific_islanders),
+    african_american = as.numeric(african_american),
+    native_american = as.numeric(native_american),
+    hispanic = as.numeric(hispanic),
+    white = as.numeric(white),
+    other = as.numeric(other),
+    reporting = as.numeric(reporting),
+    total_adherents = as.numeric(total_adherents)
+  )
+
+race_adherents
+```
+
+
+
+## Answer questions
+
+Q1. Write code to generate the percentage of Hispanic adherents for all denominations that have more than 0 Hispanic adherents. That means using `filter()` and `mutate()` to get your result, and then arranging it so that the name with the highest percentage is shown first. Which denomination has the largest percentage, and what's the story here? Write a sentence or two summarizing the results.
+
+Calculating the percentage of Hispanic adherents for all denominations that have more than 0 Hispanic adherents, the top denomination is the Roman Catholic Church with 34%. I think this result makes sense because a lot of Latin American countries have strong Catholic ties from Spain, and this religion is very popular amongst this demographic. 
+
+A1.
+
+```{r}
+race_adherents |>
+  filter(hispanic > 0) |>
+  mutate(hispanic_pct = (hispanic / total_adherents) * 100) |>
+  arrange(desc(hispanic_pct))
+```
+
+Q2. Building on Q1, now calculate the percentage of Black/African American adherents for all denominations that have more than 0 Black/African American adherents. Which denomination has the largest percentage? What patterns do you notice when comparing these results to Q1?
+
+The denomination that has the highest percentage is the Assemblies of God denomination with 10.4%. One of the biggest things I notice in comparison to the results in question 1 is that the percentages of Hispanic adherents are much larger than the percentage of African American adherents. All of the African American percentages are mostly 10% or less whereas the Hispanic adherents percentages are a broader range with the highest being above 20%. This could reflect that Hispanic adherents are more likely to follow the beliefs of Christian/Catholic denominations and that African American congregants prefer other teachings. 
+
+A2.
+
+```{r}
+race_adherents |>
+  filter(hispanic > 0) |>
+  mutate(black_pct = (african_american / total_adherents) * 100) |>
+  arrange(desc(black_pct))
+```
+
+Q3. For denominations that have reported race/ethnicity data (that have a value in the `reporting` column), calculate what percentage of their adherents they were able to report race/ethnicity data for. Which denominations reported data for 100% of their adherents, and which reported the least?
+
+The denominations that reported data for 100% of their adherents were the Church of Brethren, Baha'l Faith in the United States, Assemblies of God, Church of Nazarene and the Roman Catholic Church. All of these denominations reported 100% or higher. The denominations that reported the least were the Evangelical Lutheran Church in America and the Anglican Church of Canada which had a result of NA. 
+A3.
+
+```{r}
+race_adherents |>
+  mutate(reported_pct = (reporting / total_adherents) * 100) |>
+  arrange(desc(reported_pct))
+```
+
+
+Q4. In 2019, the United Methodist Church voted to permit individual member churches to leave the denomination if they disagreed with the church's policies on sexuality. The Lewis Center for Church Leadership published [this PDF](https://www.churchleadership.com/wp-content/uploads/2024/01/Disaffiliating-UM-Churches-report-Jan-2024.pdf) on churches that chose to "disaffiliate" in 2024. Using Tabula, extract the tables showing the disaffiliations by juridisction contained in the PDF's appendix (beginning on page 12).
+
+To do this, you will want to get all of the jurisdictions but not each set of headers (you'll add headers later in R). Draw boxes over each of the jurisdiction tables and export them as a single CSV file, then load that file into a dataframe called `disaffiliations` - adding good header names using `rename()` and turning the percentage column into a number. HINT: You can just add/replace a column to calculate each percentage.
+
+Then write code to calculate the total number of 2019 churches, the total number of churches leaving and the percentage from those two totals.
+
+Using that percentage to in a filter to show the number of conferences above the overall percentage. What's the overall percentage of churches that are leaving, and how many conferences have percentages above that figure? Where are the conferences with the highest percentages located?
+
+A4:
+
+```{r}
+disaffiliations <- read_csv("Disaffiliating-UM-Churches-report-Jan-2024.csv", col_names = FALSE) |> clean_names()
+
+disaffiliations
+```
+```{r}
+disaffiliations <- disaffiliations |>
+  rename(
+    jurisdiction = x1,
+    churches_2019 = x2,
+    churches_leaving = x3,
+    leaving_pct = x4
+  )
+
+disaffiliations
+```
+```{r}
+disaffiliations <- disaffiliations |>
+  mutate(leaving_pct = as.numeric(str_replace(leaving_pct, "%", "")))
+
+disaffiliations
+```
+```{r}
+totals <- disaffiliations |>
+  summarize(
+    churches_2019 = sum(churches_2019),
+    churches_leaving = sum(churches_leaving)
+  )
+
+totals <- totals |>
+  mutate(overall_percent = (churches_leaving / churches_2019) * 100)
+
+totals
+
+```
+```{r}
+disaffiliations |>
+  filter(leaving_pct > totals$overall_percent) |> 
+  arrange(desc(leaving_pct))
+```
+
+Q5. What's the best story idea or question you've seen as a result of the work you've done in this lab?
+
+A5.The best story idea/ question I have from the data is regarding race, culture and the choice of one's denomination. As I mentioned in question 1 of the lab, I thought the results made sense that the highest percentage of Hispanic adherents were within the Roman Catholic Church since Latin American countries have very strong historical ties to the religion. I would like to know how does your cultural background influence your religious beliefs, and ultimately, what denomination you follow. 
+
+Another thing that I found interesting was regarding the disaffiliation data. In the top ten leaving percentages that were greater than the overall percentage, there are several states from what is generally known as the deep south or south. I would be interested into knowing why there are such high percentages of church disaffiliations within this region. Does it have to do with politics? Are more people shying away from church in the south even though it has been a tradition?  
