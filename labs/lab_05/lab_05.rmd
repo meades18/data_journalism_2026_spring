@@ -107,32 +107,25 @@ race_adherents
 ```{r}
 
 race_adherents <- race_adherents |>
-  mutate(asian_pacific_islanders =
-           as.numeric(str_replace_all(asian_pacific_islanders, ",", "")))
+  mutate(asian_pacific_islanders = str_replace(asian_pacific_islanders, ",", "")) 
 
 race_adherents <- race_adherents |>
-  mutate(african_american =
-           as.numeric(str_replace_all(african_american, ",", "")))
+  mutate(african_american = str_replace(african_american, ",", "")) 
 
 race_adherents <- race_adherents |>
-  mutate(native_american =
-           as.numeric(str_replace_all(native_american, ",", "")))
+  mutate(native_american = str_replace(native_american, ",", "")) 
 
 race_adherents <- race_adherents |>
-  mutate(hispanic =
-           as.numeric(str_replace_all(hispanic, ",", "")))
+  mutate(hispanic = str_replace(hispanic, ",", "")) 
 
 race_adherents <- race_adherents |>
-  mutate(white =
-           as.numeric(str_replace_all(white, ",", "")))
+  mutate(white = str_replace(white, ",", ""))
 
 race_adherents <- race_adherents |>
-  mutate(other =
-           as.numeric(str_replace_all(other, ",", "")))
+  mutate(other = str_replace(other, ",", ""))
 
 race_adherents <- race_adherents |>
-  mutate(reporting =
-           as.numeric(str_replace_all(reporting, ",", "")))
+  mutate(reporting = str_replace(reporting, ",", ""))
 
 race_adherents
 ```
@@ -162,9 +155,9 @@ race_adherents
 
 Q1. Write code to generate the percentage of Hispanic adherents for all denominations that have more than 0 Hispanic adherents. That means using `filter()` and `mutate()` to get your result, and then arranging it so that the name with the highest percentage is shown first. Which denomination has the largest percentage, and what's the story here? Write a sentence or two summarizing the results.
 
-Calculating the percentage of Hispanic adherents for all denominations that have more than 0 Hispanic adherents, the top denomination is the Roman Catholic Church with 34%. I think this result makes sense because a lot of Latin American countries have strong Catholic ties from Spain, and this religion is very popular amongst this demographic. 
 
-A1.
+
+A1.Calculating the percentage of Hispanic adherents for all denominations that have more than 0 Hispanic adherents, the top denomination is the Roman Catholic Church with 34%. I think this result makes sense because a lot of Latin American countries have strong Catholic ties from Spain, and this religion is very popular amongst this demographic. 
 
 ```{r}
 race_adherents |>
@@ -175,9 +168,9 @@ race_adherents |>
 
 Q2. Building on Q1, now calculate the percentage of Black/African American adherents for all denominations that have more than 0 Black/African American adherents. Which denomination has the largest percentage? What patterns do you notice when comparing these results to Q1?
 
-The denomination that has the highest percentage is the Assemblies of God denomination with 10.4%. One of the biggest things I notice in comparison to the results in question 1 is that the percentages of Hispanic adherents are much larger than the percentage of African American adherents. All of the African American percentages are mostly 10% or less whereas the Hispanic adherents percentages are a broader range with the highest being above 20%. This could reflect that Hispanic adherents are more likely to follow the beliefs of Christian/Catholic denominations and that African American congregants prefer other teachings. 
+ 
 
-A2.
+A2. The denomination that has the highest percentage is the Assemblies of God denomination with 10.4%. One of the biggest things I notice in comparison to the results in question 1 is that the percentages of Hispanic adherents are much larger than the percentage of African American adherents. All of the African American percentages are mostly 10% or less whereas the Hispanic adherents percentages are a broader range with the highest being above 20%. This could reflect that Hispanic adherents are more likely to follow the beliefs of Christian/Catholic denominations and that African American congregants prefer other teachings. 
 
 ```{r}
 race_adherents |>
@@ -206,7 +199,7 @@ Then write code to calculate the total number of 2019 churches, the total number
 
 Using that percentage to in a filter to show the number of conferences above the overall percentage. What's the overall percentage of churches that are leaving, and how many conferences have percentages above that figure? Where are the conferences with the highest percentages located?
 
-A4:
+A4: The overall percentage of churches leaving is 24% with a majority of the conferences maintaining percentages that are higher. The conferences that have the highest percentages are Northwest Texas, North Alabama and South Georgia, all considered within the deep south. 
 
 ```{r}
 disaffiliations <- read_csv("Disaffiliating-UM-Churches-report-Jan-2024.csv", col_names = FALSE) |> clean_names()
@@ -226,26 +219,34 @@ disaffiliations
 ```
 ```{r}
 disaffiliations <- disaffiliations |>
-  mutate(leaving_pct = as.numeric(str_replace(leaving_pct, "%", "")))
+  mutate(leaving_pct = str_replace(leaving_pct, "%", ""),
+         leaving_pct = as.numeric(leaving_pct))
+
 
 disaffiliations
 ```
 ```{r}
-totals <- disaffiliations |>
-  summarize(
-    churches_2019 = sum(churches_2019),
-    churches_leaving = sum(churches_leaving)
-  )
+disaffiliations <- disaffiliations |>
+mutate(
+    total_churches_2019 = sum(churches_2019),
+    total_leaving = sum(churches_leaving)
+    )
 
+```
+
+  
+```{r}
 totals <- totals |>
-  mutate(overall_percent = (churches_leaving / churches_2019) * 100)
+  mutate(overall_percent = (total_leaving / total_churches_2019) * 100)
 
 totals
 
 ```
+
+
 ```{r}
 disaffiliations |>
-  filter(leaving_pct > totals$overall_percent) |> 
+  filter(leaving_pct > 24) |> 
   arrange(desc(leaving_pct))
 ```
 
