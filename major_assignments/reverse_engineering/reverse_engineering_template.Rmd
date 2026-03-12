@@ -40,7 +40,7 @@ religion_data <- read_csv("data/ces_2024_religion.csv")
 
 # Clean required data and prepare for analysis if needed. 
 
- religion_data <- religion_data |> clean_names() |> 
+ religion_data <- religion_data |> clean_names()  
 
 ```
 
@@ -49,15 +49,37 @@ In this notebook, we are reverse engineering five sentences from the story.
 
 ### Sentence 1
 
-* **Sentence text**: [Paste in sentence to engineer here]
-* **Analysis summary**: [Write up two to three sentences describing the results of your analysis.  Were you able to confirm the finding? If not, why not?]
+* **Sentence text**: income barely budges the needle within traditions, but traditions themselves are separated by enormous political gaps,
+
+* **Analysis summary**: For this sentence I tested the first half: "income barely budges the needle within traditions." 
 
 ```{r}
 # Put code to reverse engineer sentence here
 
+
+black_protestant_pres <- religion_data |> filter(trad == "Black Protestant") |>
+  group_by(vote_2024) |>
+  summarize(count = n())
+
+
 # Display results of code below this codeblock
+black_protestant 
+```
+
+```{r}
+
+  
+```
+
+```{r}
 
 ```
+
+```{r}
+
+```
+
+
 
 ### Sentence 2
 
