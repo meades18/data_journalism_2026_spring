@@ -1,0 +1,277 @@
+---
+title: "pre_lab_06.Rmd"
+author: "Madison Eades"
+date: "2026-03-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Points to hit
+
+1.  Review of fifth lab questions/problems.
+2.  Demonstration of combining, pivoting, and joining data
+
+## Chapter 22
+
+### Task 1: Load libraries and settings
+
+**Task** Run the following code in the gray-colored codeblock below to load the tidyverse library and turn off scientific notation.
+
+```{r}
+# turn off sci notation
+options(scipen=999)
+library(tidyverse)
+library(lubridate)
+```
+
+Often, as data journalists, we're looking at data across time or at data stored in multiple tables. And to do that, we need to merge, reshape, and join data together.
+
+We might have data in multiple files that needs to be combined. We might have data in a "wide" format that needs to be converted to "long" format for analysis. And we might have datasets that need to be joined together on common elements.
+
+Let's explore these techniques using FEC contribution data from Maryland clergy and United Methodist church membership data.
+
+### Task 2: Load clergy contribution data
+
+Let's say that we have Maryland clergy contribution data from five different election cycles in five different files. They have the same record layout. We can combine them into a single dataframe.
+
+**Task** Load the five clergy contribution CSV files. Do they have the same column structure? **Answer** yes
+
+```{r}
+clergy_contribs_2016 <- read_csv("data/clergy_contribs_2016.csv")
+clergy_contribs_2018 <- read_csv("data/clergy_contribs_2018.csv")
+clergy_contribs_2020 <- read_csv("data/clergy_contribs_2020.csv")
+clergy_contribs_2022 <- read_csv("data/clergy_contribs_2022.csv")
+clergy_contribs_2024 <- read_csv("data/clergy_contribs_2024.csv")
+```
+
+All of these datasets have the same number of columns, all with the same names, so if we want to merge them together to compare them over time, we need to stack them together. The verb here, in R, is bind_rows. You tell the function what you want to combine and it does it, assuming that you've got column names in common containing identically formatted data.
+
+Since we have five dataframes, we're going to need to pass them as a list, meaning they'll be enclosed inside the list function.
+
+### Task 3: Using bind_rows
+
+**Task** Combine the five files into a single data frame using the bind_rows() function, along with list().
+
+```{r}
+# bind_rows with list
+clergy_contribs_combined <- bind_rows(list(clergy_contribs_2016, clergy_contribs_2018, clergy_contribs_2020, clergy_contribs_2022, clergy_contribs_2024))
+View(clergy_contribs_combined)
+```
+
+There are plenty of uses for bind_rows: any regularly updated data that comes in the same format like crime reports, award recipients, or campaign contributions across multiple election cycles.
+
+## Reshaping data with pivot functions
+
+Now that we have all our contribution data in one place, let's explore how to reshape it. Sometimes data is easier to analyze or visualize in different formats. R provides two key functions for this: pivot_wider and pivot_longer.
+
+### Task 4: Calculate contribution totals by person and cycle
+
+Before we can reshape the data, we need to summarize it. Let's calculate the total amount each person contributed in each election cycle.
+
+**Task** Run the following code to create a summary of contributions by person and cycle. How many rows does this produce compared to the original combined data? **Answer** Compared to the 42,052 rows, the summary of contributions by person and cycle generates 3,159 rows. 
+
+```{r}
+clergy_totals_by_cycle <- clergy_contribs_combined |>
+  group_by(contributor_name, two_year_transaction_period) |>
+  summarize(
+    total_amount = sum(contribution_receipt_amount),
+    num_contributions = n(),
+  )
+
+glimpse(clergy_totals_by_cycle)
+```
+
+### Task 5: Pivot to wide format
+
+Right now our data is in "long" format - each row represents one person's contributions in one election cycle. But what if we want to see all of someone's contributions across cycles in a single row? That's where pivot_wider comes in.
+
+Before we pivot, we need to select only the columns we want to reshape. We'll keep contributor_name, two_year_transaction_period, and total_amount. This ensures we get exactly one row per contributor in the wide format.
+
+**Task** Run the following code to pivot the data to wide format. Examine the result. How many columns do you now have for contribution amounts? **Answer**
+
+Each year became a column, which now totals to six columns. 
+
+```{r}
+clergy_wide <- clergy_totals_by_cycle |>
+  select(contributor_name, two_year_transaction_period, total_amount) |>
+  pivot_wider(
+    names_from = two_year_transaction_period,
+    values_from = total_amount,
+    values_fill = 0
+  )
+
+glimpse(clergy_wide)
+View(clergy_wide)
+```
+
+Notice how each election cycle (2016, 2018, 2020, 2022, 2024) is now its own column. This format makes it easy to compare someone's giving patterns across cycles at a glance.
+
+### Task 6: Understanding wide format
+
+**Task** Using the clergy_wide data, find the contributors who gave in all five election cycles. How would you do this? Write and run code to find them. **Answer** 
+
+```{r}
+# Your code here to find people who gave in all 5 cycles
+clergy_wide |> 
+  filter(`2024` >0, `2022` > 0, `2020` > 0, `2018` > 0, `2016` > 0)
+
+```
+
+### Task 7: Pivot back to long format
+
+Sometimes you need to convert data from wide back to long format. This is common when preparing data for visualization with ggplot2, which generally prefers long format data.
+
+**Task** Run the following code to convert the wide data back to long format. Compare the result to clergy_totals_by_cycle. Are they the same? **Answer** Compared to clergy_wide, the clergy_long does not appear to be the same. In clergy_wide, the results show each year as a column for each payee. On the other hand, the clergy_long format puts the years in one column and lists out the names of each payee. 
+
+```{r}
+clergy_long <- clergy_wide |>
+  pivot_longer(
+    cols = c(`2016`, `2018`, `2020`, `2022`, `2024`),
+    names_to = "election_cycle",
+    values_to = "total_contributions"
+  )
+
+glimpse(clergy_long)
+```
+Notice that pivot_longer takes:
+- cols: which columns to pivot (the cycle years)
+- names_to: what to call the new column that will hold the old column names
+- values_to: what to call the new column that will hold the values
+
+## Joining data
+
+More complicated is when you have two separate tables that are connected by a common element or elements. But there's a verb for that, too: join.
+
+Let's start by reading in some United Methodist church clergy data. We have two files: one with basic information about clergy, and another with more detailed church assignment data. Clergy can be assigned to multiple churches over their career, but they are the same person.
+
+### Task 8: Loading United Methodist data
+
+**Task** Load the two United Methodist data files and examine their structure. What columns do they have in common? What columns are unique to umdata_people_all? **Answer** THe columns that they have in common are the account status, first, middle and last names, GCFAId and the conference each person is a part of. The columns that appear in the umdata_people_all that do not appear in the umdata_people dataset is the conference name and id. 
+
+```{r}
+umdata_people <- read_csv('data/umdata_people.csv')
+umdata_people_all <- read_csv('data/umdata_people_all.csv')
+
+glimpse(umdata_people)
+glimpse(umdata_people_all)
+```
+
+You should notice that umdata_people_all has two additional columns: ConferenceId and ConferenceName. These contain the detailed church assignment information. When we join these datasets, we'll select only these unique columns from umdata_people_all to avoid creating duplicate columns with .x and .y suffixes.
+
+### Task 9: Understanding the relationship between datasets
+
+Before joining data, it's crucial to understand how the tables relate to each other.
+
+**Task** Run the following code to compare the two datasets. How many unique people (GCFAId) are in each dataset? Why might umdata_people_all have so many more rows? **Answer** The umdata_people_all may have more rows because there are duplicates of members with different assignments. 
+
+```{r}
+# Count unique people in each dataset
+umdata_people |>
+  summarize(unique_people = n_distinct(GCFAId))
+
+umdata_people_all |>
+  summarize(unique_people = n_distinct(GCFAId))
+
+# Count total rows
+nrow(umdata_people)
+nrow(umdata_people_all)
+```
+
+The umdata_people_all dataset has many more rows than unique people because each person can have multiple church assignments over time. This is called a one-to-many relationship.
+
+### Task 10: Inner join
+
+An inner_join keeps only the records that exist in BOTH datasets. Let's find the people who appear in both datasets.
+
+Since both datasets share most columns, we'll select only the unique information from umdata_people_all (ConferenceId and ConferenceName) to avoid duplicate columns with .x and .y suffixes.
+
+**Task** Run the following code to perform an inner join. How many rows does the result have? Why? **Answer**
+
+```{r}
+people_matched <- umdata_people |>
+  inner_join(
+    umdata_people_all |> select(GCFAId, ConferenceId, ConferenceName),
+    join_by(GCFAId)
+  )
+
+nrow(people_matched)
+glimpse(people_matched)
+```
+
+### Task 11: Left join
+
+A left_join keeps ALL records from the left (first) dataset and only matching records from the right (second) dataset.
+
+Since both datasets share most of the same columns, we'll select only the unique columns from umdata_people_all (ConferenceId and ConferenceName) plus the join key before joining. This gives us a clean result without duplicate columns.
+
+**Task** Run the following code to perform a left join. How does the row count compare to the inner join? **Answer** In the people_with_conferences dataset, there are about 2,000 more rows compared to the inner join. 
+
+```{r}
+people_with_conferences <- umdata_people |>
+  left_join(
+    umdata_people_all |> select(GCFAId, ConferenceId, ConferenceName),
+    join_by(GCFAId)
+  )
+
+nrow(people_with_conferences)
+glimpse(people_with_conferences)
+```
+
+### Task 12: Understanding one-to-many joins
+
+When you join a table with unique records to a table with multiple records per key, the result will have multiple rows for each match.
+
+**Task** Pick a person from umdata_people and examine their records in the joined data. How many conference assignments do they have? **Answer** Abbott Bennett had two assignments. 
+
+```{r}
+# Example: look at the first person
+sample_person <- umdata_people |> slice(1)
+sample_gcfaid <- sample_person$GCFAId
+
+people_with_conferences |>
+  filter(GCFAId == sample_gcfaid) |>
+  select(FirstName, LastName, GCFAId, Conferences, ConferenceName, AccountStatus)
+```
+
+### Task 13: Anti join
+
+An anti_join keeps records from the left dataset that DON'T have matches in the right dataset. This is useful for finding missing data.
+
+**Task** Run the following code to find people in umdata_people who don't appear in umdata_people_all. Are there any? Why or why not? You can check people's URLs. **Answer** There are about 2,500 people that are in the umdata_people_all dataframe. From the looks of it in the people_not_in_all dataframe, most of these members seem to be inactive or deceased, which could explain why they do not appear in the umdata_people_all. 
+
+```{r}
+people_not_in_all <- umdata_people |>
+  anti_join(umdata_people_all, join_by(GCFAId))
+
+nrow(people_not_in_all)
+```
+
+### Task 14: Analyzing conference assignments
+
+Now that we understand joins, let's use them to answer questions about the data.
+
+**Task** Using the joined data, find out how many different conference assignments people have. Which person has the most conference assignments? **Answer** There are five poeople with the most conference assignments, with 2 each. 
+
+```{r}
+conference_counts <- people_with_conferences |>
+  group_by(GCFAId, FirstName, LastName) |>
+  summarize(
+    num_conferences = n(),
+    conferences_list = paste(unique(ConferenceName), collapse = "; "),
+    .groups = 'drop'
+  ) |>
+  arrange(desc(num_conferences))
+
+head(conference_counts, 10)
+```
+
+### Task 15: Combining what we've learned
+
+**Task** Using both the clergy contribution data and the UM data, think about what other questions you could answer. Write down at least two questions you could explore. **Answer**
+
+1. My first question is kind of simple but it is only because I lack some knowledge of assignments and I am genuinely curious about the religion and business aspect of the United Methodist Church. So my question is how is it decided which church a clergy member is assigned to, and what does this process look like. Using the data, another question I have about the data is whether there are more inactive members compared to active members. As we saw in the previous lab, there seems to be higher percentages of people leavbing the UM conference since 2019, does this trend also apply to clergy members and pastors? 
+
+2. Regarding the clergy contributions data, one question that I think could be answered through the data is how much each party received per election cycle. Are there trends here, such as the democrats receiving higher amounts or the republicans? Another question I have is whether the contribution to each committee follows the teachings of the clergy's respective church. This could be answered by finding the results of the first question, then researching the beliefs of the church the member is a part of. 
