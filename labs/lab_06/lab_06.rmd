@@ -1,0 +1,204 @@
+---
+title: "lab_06"
+author: "Madison Eades"
+date: "2026-03-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries and establish settings
+
+```{r}
+# Turn off scientific notation
+options(scipen=999)
+
+# load your libraries
+library(tidyverse)
+library(lubridate)
+```
+
+## Getting Started
+
+This week we'll be combining and joining data to make it more useful and to ask some questions about it. We'll use clergy contribution data from multiple election cycles and United Methodist church membership data to do this.
+
+## Load Data
+
+First, let's load all the data we'll need for this lab.
+
+```{r}
+# Load the five clergy contribution files for different election cycles
+clergy_contribs_2016 <- read_csv("data/clergy_contribs_2016.csv")
+clergy_contribs_2018 <- read_csv("data/clergy_contribs_2018.csv")
+clergy_contribs_2020 <- read_csv("data/clergy_contribs_2020.csv")
+clergy_contribs_2022 <- read_csv("data/clergy_contribs_2022.csv")
+clergy_contribs_2024 <- read_csv("data/clergy_contribs_2024.csv")
+# Load the two United Methodist data files
+
+umdata_people <- read_csv('data/umdata_people.csv')
+umdata_people_all <- read_csv('data/umdata_people_all.csv')
+```
+
+## Answer questions
+
+Q1. Now you're interested in understanding giving patterns by election cycle. Combine the five clergy contribution files into a single dataframe, then calculate the total dollar amount contributed in each election cycle, and the total number of contributions in each cycle. Which cycle had the most money contributed? Which had the most individual contributions? What's the difference between those two results, and what might explain it? The election cycle that had the most money contributed was the 2024 election, with $407,025.51 contributed. The election cycle that had the most contributions was in 2024, with 17,593 contributions made. I think that 2024 had the most individual contributions and the most money contributed because this particular election cycle is because this particular election had a lot of media coverage and defined it as a life altering election. 
+
+A1. 
+
+```{r}
+clergy_contribs_combined <- bind_rows(list(clergy_contribs_2016, clergy_contribs_2018, clergy_contribs_2020, clergy_contribs_2022, clergy_contribs_2024))
+View(clergy_contribs_combined)
+```
+
+
+```{r}
+clergy_totals <- clergy_contribs_combined |>
+  group_by(contributor_name,two_year_transaction_period) |>
+  summarize(
+    total_amount = sum(contribution_receipt_amount),
+    num_contributions = n(),
+  )
+```
+
+
+Q2. Some clergy members have been more consistent donors across election cycles. Using the combined contribution data, create a dataframe that shows each contributor and how many different election cycles they contributed in (someone who gave in 2016, 2018, and 2024 would have 3 cycles). You can use group_by and summarize to do this. Who contributed in all five election cycles? How many people contributed in only one cycle vs. multiple cycles? 
+
+The people that contributed in all five election cycles were Doris Cowan, Timothy Agbeja and 30 others. On the other hand, there were 1,419 people that only contributed money once, and 665 people that contributed more than once. 
+
+A2. 
+
+```{r}
+cycle_counts <- clergy_contribs_combined |>
+  group_by(contributor_name) |>
+  summarize(cycles_contributed = n_distinct(two_year_transaction_period))
+```
+
+
+```{r}
+cycle_counts |> 
+  filter(cycles_contributed == 1)
+```
+
+
+```{r}
+cycle_counts |> 
+  filter(cycles_contributed > 1)
+```
+
+```{r}
+cycle_counts |> 
+  filter(cycles_contributed == 5)
+```
+
+
+Q3. You're interested in whether there are geographic patterns in clergy giving. Using the combined contribution data, calculate the total amount contributed by clergy in each city (`contributor_city`). What are the top 5 cities by total contribution amount? Then calculate the number of unique contributors in each of those top 5 cities. Are the cities with the most money also the cities with the most contributors, or are there differences?
+
+A3. The top five cities by total contribution amount are Baltimore, Silver Spring, Bowie, Upper Marlboro and Frederick. When calculating the number of unique contributors in each of the top five cities, the results are the same as the top cities. With Baltimore having the most unique contributors (240), and Frederick having 53.  
+
+```{r}
+clergy_contribs_by_city <- clergy_contribs_combined |> 
+  group_by(contributor_city) |> 
+  summarize(
+    total_amount = sum(contribution_receipt_amount),
+    num_contributions = n()
+  )
+```
+
+I feel like I could also mutate and add a new column that shows these values in the clergy_contribs_by_city dataframe, but I am unsure how I would do so. 
+```{r}
+top_cities_contributors <- clergy_contribs_combined |>
+  group_by(contributor_city) |>
+  summarize(
+    num_unique_contributors = n_distinct(contributor_name)
+  ) |>
+  arrange(desc(num_unique_contributors))
+
+top_cities_contributors
+```
+
+
+Q4. Use `pivot_wider` to create a summary showing each contributor and their total contributions in the 2020 and 2024 election cycles only (so create a dataframe with columns for contributor_name, total_2020, and total_2024). Then calculate a new column showing the change in contribution amount from 2020 to 2024. Which contributors increased their giving the most? Which decreased the most?
+The people that increased their giving the most were David Sword, Karmen Taylor and Doris Cowan. All of these contributors had an increased giving percentage above 12,000%. On the other hand, there were several people that had decreased the most, showing a percentage of -100%. 
+A4. 
+
+```{r}
+clergy_contribs_summary <- clergy_contribs_combined |>
+  filter(two_year_transaction_period == 2020 | two_year_transaction_period == 2024)
+```
+
+```{r}
+clergy_contribs_summary <- clergy_contribs_summary |> 
+  group_by(contributor_name, two_year_transaction_period) |> 
+  summarize(total_amount = sum(contribution_receipt_amount)
+  ) 
+```
+
+
+```{r}
+clergy_contribs_summary <- clergy_contribs_summary |> 
+pivot_wider(
+    names_from = two_year_transaction_period,
+    values_from = total_amount,
+    names_prefix = "total_",
+    values_fill = 0
+  )
+
+  
+```
+
+```{r}
+	clergy_contribs_summary <- clergy_contribs_summary |> 
+  mutate(
+  percent_change = ifelse(
+    total_2020 > 0,
+    ((total_2024 - total_2020) / total_2020) * 100,
+    NA
+  )
+)
+```
+
+Q5. Now let's work with the United Methodist data. Join the `umdata_people` and `umdata_people_all` datasets using `GCFAId` as the key. Before joining, select only the unique columns from `umdata_people_all` (ConferenceId and ConferenceName) to avoid duplicate columns. After joining, filter for only clergy (not laity) and count them by conference and AccountStatus. Which conferences have the most clergy, and how do Active vs. Deceased clergy compare?
+
+A5.
+
+```{r}
+people_matched <- umdata_people |>
+  inner_join(
+    umdata_people_all |> select(GCFAId, ConferenceId, ConferenceName),
+    by = "GCFAId"
+  )
+```
+
+```{r}
+people_matched <- people_matched |> 
+  filter(ClergyOrLay == "Clergy"
+  )
+```
+
+```{r}
+people_matched <- people_matched |> 
+  group_by(Conferences) |> 
+  summarize(
+   num_clergy = n() 
+  )
+```
+
+Q6. You want to explore whether there's any overlap between clergy who made political contributions and clergy in the United Methodist database. Using the combined contribution data and the UM data, identify any contributors whose names (first and last name) match clergy in the `umdata_people` file. How many matches do you find? What challenges does this kind of name-based matching present? Are there ways to improve the accuracy of matching?
+
+A6. 
+
+```{r}
+um_contribs_combined <- people_matched |>
+  inner_join(
+    clergy_contribs_combined |> select(FirstName, LastName),
+    by = "contributor_name")
+```
+
+Q7. Choose your own adventure: Come up with a question that requires you to use at least one join and one aggregation (sum, mean, count, etc.) using either the clergy contribution data, the UM data, or both. Write the question, then write the code to answer it, and provide an answer.
+
+A7: 
+
+```{r}
+```

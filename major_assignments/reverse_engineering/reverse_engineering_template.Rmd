@@ -59,38 +59,53 @@ In this notebook, we are reverse engineering five sentences from the story.
 
 black_protestant_pres <- religion_data |> filter(trad == "Black Protestant") |>
   group_by(vote_2024) |>
-  summarize(count = n())
+  summarize(count = n()
+            )
 
 
 # Display results of code below this codeblock
-black_protestant 
+black_protestant_pres 
 ```
-
 ```{r}
-
-  
+ 
 ```
 
-```{r}
 
-```
 
-```{r}
 
-```
+
 
 
 
 ### Sentence 2
 
-* **Sentence text**: [Paste in sentence to engineer here]
+* **Sentence text**: A Southern Baptist and an atheist with the exact same income are separated by sixty percentage points in their likelihood of voting Republican." 
 * **Analysis summary**: [Write up two to three sentences describing the results of your analysis.  Were you able to confirm the finding? If not, why not?]
+
+For this, I wanted to first group the dataframe by income and tradition. Then I used the summarize function and calculated the mean vote for vote_2024, which out the vote on a scale from 1-2, so the higher the average vote_2024, the more likely they would vote for Trump, which is coded as 2 in the dataset. Then, I filtered the data by finding the mean_vote values that are greater than 1.5, which shows me exactly who would be more likely to vote for Trump. For the next part, I am not too sure how to solve for the actual part of the sentance I need to (exact same income are separated by sixty percentage points in their likelihood of voting Republican). So, I asked ChatGpt how I could figure out the percentage of the likelihood of a result based on the mean_vote that I had calculated, and explained that I thought that the closer the average was to two, the more likely the individual voted for Trump. Chat answered by providing this line of code "mutate(pct_republican = (mean_vote - 1) * 100)," and it explained that this shifts the scale from 1-2 to 0-1, making it easier to interpret the percentage of those who voted for Trump. From here, I think I would need to find the value for Southern Baptists and compare them to the values of atheists voting. However, the data does not provide information for Southern Baptists voting, so I do not understand how the writer was able to come to this conclusion. 
+
+
 
 ```{r}
 # Put code to reverse engineer sentence here
+  summary_by_income <- religion_data |> 
+  group_by(trad, income) |> 
+  summarize(
+    n = n(),
+    mean_vote = mean(vote_2024, na.rm = TRUE)
+  )
+
 
 # Display results of code below this codeblock
 
+```
+
+
+
+```{r}
+summary_by_income <- summary_by_income |>
+  filter(mean_vote > 1.5) |>                    
+  mutate(pct_republican = (mean_vote - 1) * 100)
 ```
 
 ### Sentence 3
