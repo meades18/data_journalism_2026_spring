@@ -1,7 +1,7 @@
 ---
 title: "Understanding weighted.mean() with Survey Data"
-author: "Student Name"
-date: "2026-03-23"
+author: "Madison Eades"
+date: "2026-03-24"
 ---
 
 ```{r setup, include=FALSE}
@@ -85,7 +85,7 @@ weighted.mean(values, weights, na.rm = TRUE)
 
 The two numbers are different. That difference tells you something: the raw survey sample skews slightly older or younger than the actual U.S. adult population. The weighted mean corrects for that.
 
-**Task** Which is higher, the weighted or unweighted mean? What does that tell you about who is over-represented in the raw survey responses?
+**Task** Which is higher, the weighted or unweighted mean? What does that tell you about who is over-represented in the raw survey responses? The unweighted mean is the higher value, at 52.5, meaning the survey sample skews slightly older. 
 
 ## Create Denomination Categories
 
@@ -148,6 +148,8 @@ cces |>
 Notice the differences between the two columns. For some denominations, the gap is small. For others, weighting changes the result by a year or more. That matters when you're writing a story about demographic trends.
 
 **Task** Which denomination has the highest weighted mean age? For which denomination is the gap between unweighted and weighted mean the largest?
+
+The denomination with the highest weighted mean age is the African Methodist Episcopal denomination, with an average weighted age of 62.6. The denomination with the largest gap between the unweighted average age and the weighted average age are the National Baptist convention with a nearly six year gap, and the Church of God in Chirst with nearly a five year gap. 
 
 ## Counting Things the Hard Way
 
@@ -213,12 +215,20 @@ cces |>
 
 Now it's your turn. Use what you've learned to answer these questions.
 
-**Q1.** Calculate the weighted percentage of each denomination's members who are under 30 years old (age \< 30). Which denomination has the highest share of young adults? Which has the lowest?
+**Q1.** Calculate the weighted percentage of each denomination's members who are under 30 years old (age \< 30). Which denomination has the highest share of young adults? Which has the lowest? The denomination with the highest share of young adults is the Church of Christ with 22.1%, and the denomination with the lowest share of young adults is the African Methodist Episcopal. 
 
-**A1.**
+**A1.** group by trad and fuiltert to get the age of thirty 
 
 ```{r}
-
+cces |>
+  filter(!is.na(trad)) |>
+  mutate(is_genz = birthyr >= 1996 & birthyr <= 2006) |>
+  group_by(trad) |>
+  summarise(
+    genz_pct = round(weighted.mean(is_genz, weight, na.rm = TRUE) * 100, 1),
+    .groups = "drop"
+  ) |>
+  arrange(desc(genz_pct))
 ```
 
 **Q2.** Calculate both the weighted mean age AND the weighted percentage of members over 75 for each denomination. Arrange by the over-75 percentage. Which denominations face the most urgent demographic challenges?
@@ -226,17 +236,36 @@ Now it's your turn. Use what you've learned to answer these questions.
 **A2.**
 
 ```{r}
-
+cces |> 
+  mutate(older_age = birthyr >= 75) |> 
+  group_by(trad) |>
+  summarise(weighted_mean_age = round(weighted.mean(age, weight, na.rm = TRUE), 1),
+            older_pct = round(weighted.mean(older_age, weight, na.rm = TRUE) * 100, 1))
 ```
 
 **Q3.** Calculate the weighted mean age for the general population (all respondents). Then find denominations whose weighted mean age is at least 5 years higher than that benchmark. How many denominations meet that threshold?
 
-**A3.**
+**A3.** 
 
 ```{r}
+cces |> 
+  summarise(weighted_mean_age = round(weighted.mean(age, weight, na.rm = TRUE), 1))
+```
 
+```{r}
+weighted_means_denom <- cces |> 
+  filter(!is.na(trad)) |>
+  group_by(trad) |>
+  summarise(weighted_mean_age = round(weighted.mean(age, weight, na.rm = TRUE), 1))
+```
+
+
+
+```{r}
+weighted_means_denom |> 
+  filter(weighted_mean_age >= 49.4 )
 ```
 
 **Q4.** Why does using `weighted.mean()` matter for journalism? Write 2-3 sentences about when you would need to use it and what could go wrong if you used regular `mean()` on survey data.
 
-**A4.**
+**A4.** As we learned in this activity, weights are assigned to survey respondents so that the data does not over or under-represent respondents. This is very important for journalism when you are drawing conclusions from the data based on demographic values. The weighted means provide accuracy in reporting on these topics. If a journalist were to not use the weighted means and wrote a story based on unweighted means, the results will most likely be skewed to represent those who are either over or underrepresented within the responses, which results in inaccurate conclusions being drawn. 
