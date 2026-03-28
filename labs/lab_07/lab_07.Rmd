@@ -98,7 +98,7 @@ data_combined |>
 
 **Q3** Using your joined Maryland county data, find the 5 most and 5 least religiously diverse counties based on the Diversity Index Value. Show the largest religious body by number of adherents and the median household income (you'll need to get income from the ACS and join it in) for those counties. What patterns do you notice about which religious groups dominate in more vs. less diverse counties?
 
-**A3**
+**A3** The religious group that dominates the least diverse counties is the Catholic Church, resulting in four out of the five least religiously diverse counties being the Catholic church. On the other hand, the counties that show the most amount of diversity is the United Methodist Church. However, one pattern I notice within the top five and the bottom five regarding the diversity index value is that the Catholic church is present in both results.
 
 ```{r}
 md_income <- get_acs(geography = "county",
