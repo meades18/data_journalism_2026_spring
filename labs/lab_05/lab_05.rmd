@@ -202,7 +202,7 @@ Using that percentage to in a filter to show the number of conferences above the
 A4: The overall percentage of churches leaving is 24% with a majority of the conferences maintaining percentages that are higher. The conferences that have the highest percentages are Northwest Texas, North Alabama and South Georgia, all considered within the deep south. 
 
 ```{r}
-disaffiliations <- read_csv("Disaffiliating-UM-Churches-report-Jan-2024.csv", col_names = FALSE) |> clean_names()
+disaffiliations <- read_csv("Disaffiliating-UM-Churches-report-Jan-2024.csv", col_names = FALSE) 
 
 disaffiliations
 ```
