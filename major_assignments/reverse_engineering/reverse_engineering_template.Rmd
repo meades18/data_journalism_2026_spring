@@ -51,31 +51,45 @@ In this notebook, we are reverse engineering five sentences from the story.
 
 * **Sentence text**: income barely budges the needle within traditions, but traditions themselves are separated by enormous political gaps,
 
-* **Analysis summary**: For this sentence I tested the first half: "income barely budges the needle within traditions." 
+* **Analysis summary**: For this sentence I tested the first half: "income barely budges the needle within traditions." I filtered the dataset to only show those who voted for Trump in the election. Then, I grouped by tradition and income, and counted the amount of votes for each income and tradition. I also created a system that follows a low, medium and high income scale. This sentence looks to test whether income barely budges the voting needle within traditions. For the most part, I believe this conclusion is proven by the results of my code. For example, White Evangelicals are often within the low to medium range, the White Mainline tradition is mainly in the medium range and Orthodox Christians are within the high range. 
+```{r}
+religion_data <- religion_data |> 
+  mutate(income_group = case_when(
+    income == 1 ~ "low",
+    income == 2 ~ "low",
+    income == 3 ~ "low",
+   income == 4 ~ "low",
+    income == 5 ~ "low",
+    income == 6 ~ "med",
+    income == 7 ~ "med",
+    income == 8 ~ "med",
+    income == 9 ~ "med",
+    income == 10 ~ "med",
+    income == 11 ~ "med",
+    income == 12 ~ "high", 
+    income == 13 ~ "high", 
+    income == 14 ~ "high",
+    income == 15 ~ "high",
+    income == 16 ~ "high"
+  ))
+```
+
+
 
 ```{r}
 # Put code to reverse engineer sentence here
 
 
-black_protestant_pres <- religion_data |> filter(trad == "Black Protestant") |>
-  group_by(vote_2024) |>
+rep_income_vote <- religion_data |> filter(vote_2024 == 2) |>
+  group_by(trad, income_group) |>
   summarize(count = n()
-            )
+            ) |> 
+  arrange(desc(count))
 
 
 # Display results of code below this codeblock
-black_protestant_pres 
+rep_income_vote
 ```
-```{r}
- 
-```
-
-
-
-
-
-
-
 
 ### Sentence 2
 
@@ -84,41 +98,98 @@ black_protestant_pres
 
 For this, I wanted to first group the dataframe by income and tradition. Then I used the summarize function and calculated the mean vote for vote_2024, which out the vote on a scale from 1-2, so the higher the average vote_2024, the more likely they would vote for Trump, which is coded as 2 in the dataset. Then, I filtered the data by finding the mean_vote values that are greater than 1.5, which shows me exactly who would be more likely to vote for Trump. For the next part, I am not too sure how to solve for the actual part of the sentance I need to (exact same income are separated by sixty percentage points in their likelihood of voting Republican). So, I asked ChatGpt how I could figure out the percentage of the likelihood of a result based on the mean_vote that I had calculated, and explained that I thought that the closer the average was to two, the more likely the individual voted for Trump. Chat answered by providing this line of code "mutate(pct_republican = (mean_vote - 1) * 100)," and it explained that this shifts the scale from 1-2 to 0-1, making it easier to interpret the percentage of those who voted for Trump. From here, I think I would need to find the value for Southern Baptists and compare them to the values of atheists voting. However, the data does not provide information for Southern Baptists voting, so I do not understand how the writer was able to come to this conclusion. 
 
+* **Analysis summary part two**: First, I think I am missing something within my code that gives me the correct percentages of republican vote. I also am not too sure I completely understand what these percentages mean. However, for this code, I did the same thing where I used case_when to create income groups. I filtered the data into a new dataframe to only show the votes for Harris and Trump. Then, I grouped by tradition and income group, and found the republican percentage and the Harris percentage. This section of code found the percentages of the votes for each tradition. Additionally, to test whether the sentence's conclusion was true, I found the percentage of vote for Southern Baptists by filtering for the baptist value equals 1. On the other hand, I filtered for the tradition that equals Atheist and found those percentages, as well. Looking at the results of each of these steps, it seems there are larger than sixty percentage point gaps of the likelihood to vote Republican between Southern Baptists and Atheists. For example, in the high income group for Southern Baptists, 
+
 
 
 ```{r}
 # Put code to reverse engineer sentence here
-  summary_by_income <- religion_data |> 
-  group_by(trad, income) |> 
-  summarize(
-    n = n(),
-    mean_vote = mean(vote_2024, na.rm = TRUE)
-  )
-
+vote_by_pres <- religion_data |>
+  filter(vote_2024 == 1 | vote_2024 == 2) |>
+   mutate(income_group = case_when(
+    income == 1 ~ "low",
+    income == 2 ~ "low",
+    income == 3 ~ "low",
+   income == 4 ~ "low",
+    income == 5 ~ "low",
+    income == 6 ~ "med",
+    income == 7 ~ "med",
+    income == 8 ~ "med",
+    income == 9 ~ "med",
+    income == 10 ~ "med",
+    income == 11 ~ "med",
+    income == 12 ~ "high", 
+    income == 13 ~ "high", 
+    income == 14 ~ "high",
+    income == 15 ~ "high",
+    income == 16 ~ "high"
+   )) |>
+  group_by(trad, income_group) |>
+  summarise(
+  total = n(),
+  rep_percent = weighted.mean(vote_2024 == 2) * 100,
+  harris_percent = weighted.mean(vote_2024 == 1) * 100
+) 
+  
 
 # Display results of code below this codeblock
-
+vote_by_pres
 ```
 
 
 
 ```{r}
-summary_by_income <- summary_by_income |>
-  filter(mean_vote > 1.5) |>                    
-  mutate(pct_republican = (mean_vote - 1) * 100)
+religion_data |> 
+  filter(baptist == 1) |>
+  group_by(baptist, trad, income_group) |>
+  summarise(
+    rep_percent = weighted.mean(vote_2024 == 2) * 100,
+  )
+```
+```{r}
+religion_data |> 
+  filter(trad == "Atheist") |>
+  group_by(baptist, trad, income_group) |>
+  summarise(
+    rep_percent = weighted.mean(vote_2024 == 2) * 100,
+  )
 ```
 
 ### Sentence 3
 
 * **Sentence text**: [Paste in sentence to engineer here]
-* **Analysis summary**: [Write up two to three sentences describing the results of your analysis.  Were you able to confirm the finding? If not, why not?]
+* **Analysis summary**: Trump pulled support from over 80% of white evangelicals and under 10% of Black Protestants
+
+For this sentence, I filtered the religion_data dataframe to show only votes for Harris and Trump. Then, I created a new dataframe for Black Protestants, filtering the religion data to only show results for Black Protestants, then grouped by tradition and summarised finding the mean vote percentage. The result for this is 12.2%. For White Evangelicals, I did the same process, and the result was 78.1%. So, I would say the results of my code match mostly well with the sentence's conclusion. Both of the results are very close to the percentages within the sentence. 
 
 ```{r}
 # Put code to reverse engineer sentence here
-
+trump_support <- religion_data |> 
+  filter(vote_2024 == 1 | vote_2024 == 2)
 # Display results of code below this codeblock
 
 ```
+
+```{r}
+black_prot <- trump_support |> 
+  filter(trad == "Black Protestant") |> 
+  group_by(trad) |> 
+  summarise(
+    trump_percent = mean(vote_2024 == 2) * 100
+  )
+
+black_prot
+```
+```{r}
+white_evan <- religion_data |> 
+ filter(trad == "White Evangelical") |> 
+  group_by(trad) |> 
+  summarise(
+    trump_percent = mean(vote_2024 == 2, na.rm = TRUE) * 100
+  ) 
+white_evan
+```
+
 
 ### Sentence 4
 
