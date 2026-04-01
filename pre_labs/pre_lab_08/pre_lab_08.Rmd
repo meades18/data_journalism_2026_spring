@@ -1,0 +1,316 @@
+---
+title: "pre_lab_08.Rmd"
+author: "Madison Eades"
+date: "2025-03-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Chapter 26
+
+Visualizing data is becoming a much greater part of journalism. Large news organizations are creating graphics desks that create complex visuals with data to inform the public about important events.
+
+To do it well is a course on its own. And not every story needs a feat of programming and art. Sometimes, you can help yourself and your story by just creating a quick chart, which helps you see patterns in the data that wouldn't otherwise surface.
+
+Good news: one of the best libraries for visualizing data is in the tidyverse and it's pretty simple to make simple charts quickly with just a little bit of code. It's called [ggplot2](https://ggplot2.tidyverse.org/).
+
+Let's use some religion data we've worked with and turn it into charts. First, let's load libraries. When we load the tidyverse, we get ggplot2.
+
+### Task 1: Load packages
+
+**Task** Run the following code to load packages.
+
+```{r}
+library(tidyverse)
+library(janitor)
+```
+
+The first dataset we'll use is from the U.S. Religion Census, which measures congregations and adherents for religious groups at the state level in 2020. Let's load it and clean up the column names.
+
+### Task 2: Load data
+
+**Task** Run the following code to load the data. In the space below, indicate how many rows and columns it has. **Answer** In the data, there are 51 rows and 20 columns. 
+
+```{r}
+religion_census <- read_csv("data/usreligioncensus_state_2020.csv") |> clean_names()
+```
+
+Some of the numeric columns in this data were stored with commas and percent signs, so R read them as text. Let's fix the columns we'll need using `parse_number()`, which strips out commas, percent signs and other non-numeric characters.
+
+### Task 3: Clean up numeric columns and find the top 10 states by congregations
+
+**Task** Run the following code to clean the numeric columns and find the top 10 states by number of congregations. In the space below, explain what each step of the code is doing in English. **Answer** In the first line of code, it is creating a new dataframe out of the religion_census data. Then the second line of code basically says if there is a value that is a number but has formatting, like a percent sign or decimal, the parse number function takes away these non-numeric characters. After these two lines of code, it creates another dataframe, displaying the top 10 states in descending order by congregations, using the arrange and top10 function. 
+
+```{r}
+religion_census <- religion_census |>
+  mutate(
+    adherents_as_percent_of_population = parse_number(adherents_as_percent_of_population)
+  )
+
+top_states <- religion_census |>
+  arrange(desc(congregations)) |>
+  head(10)
+
+top_states
+```
+
+## Bar charts
+
+The first kind of chart we'll create is a simple bar chart.
+
+It's a chart designed to show differences between things -- the magnitude of one thing, compared to the next thing, and the next, and the next.
+
+So if we have a thing, like a state, and then a count for that state, we can make a bar chart.
+
+So what does the chart of the top 10 states with the most religious congregations look like?
+
+Now let's create a bar chart using ggplot.
+
+With ggplot, the first thing we'll always do is draw a blank canvas that will contain our chart. We start with our dataframe name, and then (|>) we invoke the ggplot() function to make that blank canvas. All this does is make a gray box, the blank canvas that will hold our chart.
+
+### Task 4: Create an empty ggplot container
+
+**Task** Run the following code. Explain what you see after running the code in the space below. **Answer** After running the code, I see a blank canvas. 
+
+```{r}
+top_states |>
+  ggplot()
+```
+
+Next we need to tell ggplot what kind of chart to make.
+
+In ggplot, we work with two key concepts called geometries (abbreviated frequently as geom) and aesthetics (abbreviated as aes).
+
+Geometries are the shape that the data will take; think of line charts, bar charts, scatterplots, histograms, pie charts and other common graphics forms.
+
+Aesthetics help ggplot know what component of our data to visualize -- why we'll visualize values from one column instead of another.
+
+In a bar chart, we first pass in the data to the geometry, then set the aesthetic.
+
+In the codeblock below, we've added a new function, geom_bar().
+
+Using geom_bar() -- as opposed to geom_line() -- says we're making a bar chart.
+
+Inside of that function, the aesthetic, aes, says which columns to use in drawing the chart.
+
+We're setting the values on the x axis (horizontal) to be the state name. We set weight to congregations, and it uses that value to "weight" or set the height of each bar.
+
+One quirk here with ggplot.
+
+After we've invoked the ggplot() function, you'll notice we're using a + symbol. It means the same thing as |> -- "and then do this". It's just a quirk of ggplot() that after you invoke the ggplot() function, you use + instead of |>. It makes no sense to me either, just something to live with.
+
+### Task 5: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. **Answer** After the code is run in this section, the ggplot function creates a bar chart using geom_bar displaying the results of the top ten states by congregations. However, the bars are not arranged in descending order, and the x axis column names run into each other. 
+
+```{r}
+top_states |>
+  ggplot() +
+  geom_bar(aes(x=state_name, weight=congregations))
+```
+
+This is a very basic chart. But it's hard to derive much meaning from this chart, because the states aren't ordered from highest to lowest by congregations. We can fix that by using the reorder() function to do just that:
+
+### Task 6: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last codeblock? **Answer** The biggest change from the previous codeblock is that the bars are now assorted from lowest to highest. 
+
+```{r}
+top_states |>
+  ggplot() +
+  geom_bar(aes(x=reorder(state_name, congregations), weight=congregations))
+```
+
+This is a little more useful. But the bottom is kind of a mess, with overlapping names. We can fix that by flipping it from a vertical bar chart (also called a column chart) to a horizontal one. coord_flip() does that for you.
+
+### Task 7: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last codeblock? **Answer** The bar chart was flipped to be horizontal rather than vertical. This fixed the column names running into each other. 
+
+```{r}
+top_states |>
+  ggplot() +
+  geom_bar(aes(x=reorder(state_name, congregations), weight=congregations)) +
+  coord_flip()
+```
+
+Is this art? No. Does it quickly tell you something meaningful? It does. Texas has the most congregations, followed by California and then several Southern states.
+
+We're mainly going to use these charts to help us in reporting, so style isn't that important.
+
+But it's worth mentioning that we can pretty up these charts for publication, if we wanted to, with some more code. To style the chart, we can change or even modify the "theme", a kind of skin that makes the chart look better.
+
+It's kind of like applying CSS to html. Here I'm changing the theme slightly to remove the gray background with one of ggplot's built in themes, theme_minimal().
+
+### Task 8: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last codeblock? **Answer** In this code block, the main change from the last code block is that the theme_minimal function added graphed lines behind the results of the bar graph. 
+
+```{r}
+top_states |>
+  ggplot() +
+  geom_bar(aes(x=reorder(state_name, congregations), weight=congregations)) +
+  coord_flip() +
+  theme_minimal()
+```
+
+The ggplot universe is pretty big, and lots of people have made and released cool themes for you to use. Want to make your graphics look kind of like [The Economist's](https://www.economist.com/) graphics? There's a theme for that.
+
+First, you have to install and load a package that contains lots of extra themes, called [ggthemes](https://yutannihilation.github.io/allYourFigureAreBelongToUs/ggthemes/).
+
+### Task 9: Run the following code
+
+**Task** Run the following code.
+
+```{r}
+install.packages('ggthemes')
+library(ggthemes)
+```
+
+And now we'll apply the economist theme from that package with theme_economist()
+
+### Task 10: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last version of the chart? **Answer** Compared to the last code block, this result shows a blue background, dark grey bars, and white lines behind the results of the bars. This was done using the code theme_economist. 
+
+```{r}
+top_states |>
+  ggplot() +
+  geom_bar(aes(x=reorder(state_name, congregations), weight=congregations)) +
+  coord_flip() +
+  theme_economist()
+```
+
+Those axis titles are kind of a mess. Let's change them to something more readable. And while we're at it, let's add a basic title and a source as a caption. We'll use a new function, labs(), which is short for labels.
+
+### Task 11: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last codeblock? **Answer** Using the labs function in the code block, the result of this bar graph shows a title and source as the US Religion Census. 
+
+```{r}
+top_states |>
+  ggplot() +
+  geom_bar(aes(x=reorder(state_name, congregations), weight=congregations)) +
+  coord_flip() +
+  theme_economist() +
+  labs(
+    title="States With the Most Religious Congregations",
+    x = "state",
+    y = "total congregations",
+    caption = "source: U.S. Religion Census, 2020"
+  )
+```
+
+Viola. Not super pretty, but good enough to show an editor to help them understand the conclusions you reached with your data analysis.
+
+## Line charts
+
+Let's look at how to make another common chart type that will help you understand patterns in your data.
+
+Line charts can show change over time. It works much the same as a bar chart, code wise, but instead of a weight, it uses a y.
+
+We'll use a small dataset from CARA (the Center for Applied Research in the Apostolate) that tracks Catholic Church statistics over several decades.
+
+### Task 12: Load the CARA data
+
+**Task** Run the following code to load the CARA data. Explain what you see after running the code in the space below. **Answer** One of the main things that I notice in this dataframe is that the years are not consecutive, and there are priest counts for the different types of priests. 
+
+```{r}
+cara <- read_csv("data/cara.csv")
+
+cara
+```
+
+This data has just five rows -- snapshots of the Catholic Church in America in 1965, 1980, 1995, 2010 and 2024. But even with a small dataset, a line chart can reveal a powerful trend.
+
+Let's chart the number of total priests over time.
+
+### Task 13: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. **Answer** Looking at this line chart, there is a large dropoff in total priests after 1980. 
+
+```{r}
+cara |>
+  ggplot() +
+  geom_line(aes(x=year, y=total_priests))
+```
+
+The trend is clear: the number of Catholic priests in the U.S. has declined steadily since 1965. But with only five data points, the line alone can feel a bit sparse. Let's add points to mark each year's value so the actual observations stand out.
+
+### Task 14: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last codeblock? **Answer** Compared to the last codeblock, this code adds dots to the points of the line graph. 
+
+```{r}
+cara |>
+  ggplot() +
+  geom_line(aes(x=year, y=total_priests)) +
+  geom_point(aes(x=year, y=total_priests))
+```
+
+Now let's style it up with labels and a theme, just like we did with the bar chart.
+
+### Task 15: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last codeblock? **Answer** In this codeblock, the function labs() creates a title, adjusts the axes labels and adds a source. Other than the labels, these features were not present in the previous line graph. 
+
+```{r}
+cara |>
+  ggplot() +
+  geom_line(aes(x=year, y=total_priests)) +
+  geom_point(aes(x=year, y=total_priests)) +
+  theme_minimal() +
+  labs(
+    title="The Decline of Catholic Priests in the U.S.",
+    x = "year",
+    y = "total priests",
+    caption = "source: CARA"
+  )
+```
+
+That tells a pretty compelling story in a single chart. The Catholic Church went from nearly 60,000 priests in 1965 to under 34,000 in 2024.
+
+## Scatterplots
+
+There's one more basic chart type that's useful for exploring data: the scatterplot. Scatterplots show the relationship between two numeric variables. Each dot represents one observation, and its position shows the values of the two variables.
+
+Let's go back to our state religion census data and ask: do states with a higher percentage of religious adherents tend to have more or less religious diversity?
+
+We'll use the full 50-state dataset (plus D.C.) for this, plotting each state's adherents percentage on the x axis and its diversity index on the y axis.
+
+### Task 16: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. Describe any pattern you notice. **Answer** I notice that as the percentage of adherents of a population grows, the diversity index also increases. Some key points I see is the one to the far right, which shows a high percentage of adherents for the population, but low diversity within religions.
+
+```{r}
+religion_census |>
+  ggplot() +
+  geom_point(aes(x=adherents_as_percent_of_population, y=diversity_index_value))
+```
+
+Interesting, right? There does seem to be a pattern. Let's add labels and a theme to make it clearer.
+
+### Task 17: Run the following code
+
+**Task** Run the following code. Explain what you see after running the code in the space below. What has changed from the last codeblock? **Answer** In this code block, the geom_smooth function adds a trend line within the scatterplot, which was not in the previous codeblock. 
+
+```{r}
+religion_census |>
+  ggplot() +
+  geom_point(aes(x=adherents_as_percent_of_population, y=diversity_index_value)) +
+  geom_smooth(aes(x=adherents_as_percent_of_population, y=diversity_index_value), method="lm", se=FALSE) +
+  theme_minimal() +
+  labs(
+    title="Religious Adherence vs. Diversity by State",
+    x = "adherents as % of population",
+    y = "religious diversity index",
+    caption = "source: U.S. Religion Census, 2020"
+  )
+```
+
+The `geom_smooth()` function adds a trend line to the scatterplot. The `method="lm"` tells it to fit a straight line (linear model), and `se=FALSE` hides the confidence interval shading to keep it clean. This makes the overall pattern easier to see at a glance.
+
+We're just scratching the surface of what ggplot can do, and chart types. There's so much more you can do, so many other chart types you can make. But the basics we've shown here -- bar charts, line charts and scatterplots -- will get you started.
