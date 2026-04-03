@@ -1,0 +1,182 @@
+---
+title: "lab_08"
+author: "Madison Eades"
+date: "2025-04-2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries and establish settings
+
+**Task** Create a codeblock and load appropriate packages and settings for this lab. We'll be making some charts, working with dates and retrieving Census data.
+
+```{r}
+# Turn off scientific notation
+options(scipen=999)
+
+# load libraries
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(ggthemes)
+library(tidycensus)
+```
+
+## Load and modify data
+
+**Task** Create a codeblock and load the following data from the data folder:
+
+-   megachurches.csv (data on U.S. megachurches from the Hartford Institute for Religion Research)
+-   clergy_contribs_2024.csv (Federal Election Commission data on political contributions by clergy)
+-   usreligioncensus_county_2020.csv (county-level data from the U.S. Religion Census)
+
+You will need to use `clean_names()` on the data and you will need to create columns for the date, week and month based on the existing `contribution_receipt_date` column in the clergy contributions data. For the county religion census data, you will need to use `parse_number()` on at least the `adherents_as_percent_of_population` column.
+
+```{r}
+clergy_contribs_24 <- read_csv("data/clergy_contribs_2024.csv") |> clean_names() 
+  
+
+clergy_contribs_24 <- clergy_contribs_24 |> 
+  mutate(month = month(`contribution_receipt_date`)) |> 
+  mutate(day = day(`contribution_receipt_date`)) |> 
+  mutate(week = week(`contribution_receipt_date`))
+
+religion_census <- read_csv("data/usreligioncensus_county_2020.csv") |> clean_names() |> 
+  mutate(
+    adherents_as_percent_of_population = parse_number(adherents_as_percent_of_population)
+  ) 
+
+mega_churches <- read.csv("data/megachurches.csv")
+
+```
+
+## Questions
+
+**Q1.** Which denomination has the greatest share of all megachurches? Create a dataframe that calculates the percentage of all megachurches that each denomination represents. Filter it to show the top 10 denominations. Make a bar chart from that dataframe. Your bar chart must have:
+
+-   A clear title that states the main idea/finding
+-   Good labels for the x & y axis and a caption for the source, which is the Hartford Institute for Religion Research.
+-   Readable bars - the values shouldn't be overlapping
+
+Compare the results here to those from the pre_lab_08 bar chart of states by congregations - are there major differences in how denominations are distributed among megachurches vs. congregations overall? Describe that below.
+
+**A1.**
+
+```{r}
+mega_churches |>
+  group_by(denomination) |>
+  summarise(
+    count = n()
+  ) |> 
+  arrange(desc(denomination))
+```
+
+**Q2.** Let's visualize clergy political contributions over time using a line chart. Generate a dataframe with the total amount of contributions for each month, and then create a line chart to show the distribution of contributions over time. Your line chart must have:
+
+-   A clear title that states the main idea/finding
+-   Good labels for the x & y axis and a caption for the source, which is the Federal Election Commission.
+-   Readable labels
+
+Describe the pattern of results; are there particular months that stand out? What might explain the pattern you see?
+
+**A2.**
+
+```{r}
+clergy_amount_totals <- clergy_contribs_24 |>
+  group_by(month) |>
+  summarise(
+    total_amount = sum(contribution_receipt_amount, na.rm = TRUE)
+  )  |> 
+  arrange(desc(total_amount)) 
+```
+
+```{r}
+clergy_amount_totals |> 
+  ggplot() +
+  geom_line(aes(x=month, y=total_amount)) +
+  geom_point(aes(x=month, y=total_amount)) +
+  theme_minimal() +
+  labs(
+    title="October sees highest amount of clergy contributions in 2024.",
+    x = "month",
+    y = "total amount contributed",
+    caption = "source: Federal Election Committee"
+  )
+```
+
+
+
+**Q3.** A scatterplot is a type of chart that helps us see relationships between two variables. One variable goes on the x axis, the other on the y axis. For each row/observation in our data, a scatterplot puts a circle (or a "point") where the two variables intersect on a grid.
+
+Statisticians use scatterplots to show graphically whether one variable is correlated -- related, in a statistical sense -- with another variable. A classic example is the [relationship between ice cream sales and temperature](https://www.mathsisfun.com/data/scatter-xy-plots.html). The scatterplot below -- press play to load the image -- shows that relationship, that an increase in temperature is associated with an increase in ice cream sales. When it's 12C, sales are 200 dollars, and when it's hotter, 25C, sales are 600 dollars.
+
+```{r}
+knitr::include_graphics("https://www.mathsisfun.com/data/images/scatter-ice-cream1.svg")
+```
+
+We're going to use a scatterplot a little differently, to get a visual sense of two key variables:
+
+Our question is: does the median household income in a Maryland county have any relationship to the percentage of the population that are religious adherents?
+
+To answer this question, do the following:
+
+1.  Filter the county religion census data to Maryland counties only.
+2.  Get data from the Census Bureau showing median household income for Maryland counties using tidycensus.
+3.  Join those two dataframes on their FIPS/GEOID columns, starting with the religion census dataframe.
+4.  Make a scatterplot showing the adherents percentage and median income.
+5.  Give it an appropriate title, source, and x and y axis titles.
+6.  Add a label for each point that shows the county name using geom_text() - see some examples of its use at <https://ggplot2.tidyverse.org/reference/geom_text.html#ref-examples>. Try to make the names as easy to read as possible by avoiding overlap.
+7.  In the answer space below, describe what you see and answer the questions posed above. In a general sense, what do you think this means? Feel free to consider the actual raw values: how would you report out the main point(s) of this chart?
+
+**A3.**
+
+```{r}
+md_reli_census <- religion_census |> 
+  filter(state_name == "Maryland") 
+
+md_income <- get_acs(
+  geography = "county",
+  variables = c(medincome = "B19013_001"),
+  state = "MD",
+  year = 2020
+)
+
+md_combined <- md_income |>
+  inner_join(md_reli_census, join_by(GEOID == fips))
+
+md_combined |> 
+  ggplot() +
+  geom_point(aes(x=adherents_as_percent_of_population, y=estimate)) +
+  geom_smooth(aes(x=adherents_as_percent_of_population, y=estimate), method="lm", se=FALSE) +
+  geom_text(aes(x = adherents_as_percent_of_population, 
+              y = estimate, 
+              label = county_name), 
+          check_overlap = TRUE) +
+  theme_minimal() +
+  labs(
+    title="Religious Adherence across median household income by county",
+    x = "adherents as % of population",
+    y = "median income",
+    caption = "source: U.S. Religion Census, 2021"
+  )
+```
+
+**Q4.** A histogram is similar to a bar chart, but instead of showing counts for categories, it shows the **distribution** of a continuous variable. It does this by dividing the data into "bins" — equal-sized ranges — and showing how many observations fall into each bin. This is useful for seeing the shape of your data: is it clustered around one value? Is it spread out? Does it have a long tail?
+
+In ggplot, you make a histogram with `geom_histogram()`. Unlike `geom_bar()`, you only need to set the x aesthetic — ggplot counts the observations in each bin for you. You can control the bin width with the `binwidth` argument inside `geom_histogram()`.
+
+Using the megachurches data, create a histogram showing the distribution of church sizes (attendance). Your histogram must have:
+
+-   A clear title that states the main idea/finding
+-   Good labels for the x & y axis and a caption for the source, which is the Hartford Institute for Religion Research.
+-   A reasonable bin width. Try at least two different values for `binwidth` and settle on one that tells the clearest story. The binwidth should not be outside the range of actual values for attendance, and should be on the lower end of that range.
+
+In the answer space below, describe the shape of the distribution. Where do most megachurches cluster? Are there outliers? What does this tell you about what "megachurch" means in practice?
+
+**A4.**
+
+```{r}
+```
