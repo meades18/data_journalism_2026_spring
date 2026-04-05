@@ -71,7 +71,7 @@ denomination_totals <- mega_churches |>
   summarise(
     count = n()
   ) |>
-mutate(percent_share = count / sum(count) * 100) |>
+mutate(percent_share = count * 100) |>
   arrange(desc(percent_share)) |> 
   head(10)
 
