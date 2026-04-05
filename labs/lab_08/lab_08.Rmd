@@ -63,7 +63,7 @@ mega_churches <- read.csv("data/megachurches.csv")
 
 Compare the results here to those from the pre_lab_08 bar chart of states by congregations - are there major differences in how denominations are distributed among megachurches vs. congregations overall? Describe that below.
 
-**A1.**
+**A1.** Looking at the results of the bar chart for how denominations are distributed among megachurches, there seems to be a larger distribution with independent, nondenominational holding the highest percentage by over 10%. For the bar chart in prelab 8 that shows the distribution of congregations overall, there seems to be a smaller distribution among the states, with the difference between Texas and California is around 9% or so. 
 
 ```{r}
 denomination_totals <- mega_churches |>
@@ -82,17 +82,14 @@ denomination_totals
 ```{r}
 denomination_totals |>
   ggplot() +
-  geom_bar(
-    aes(x = reorder(denomination, percent_share), y = percent_share),
-    fill = "steelblue", 
-  ) +
+  geom_bar(aes(x=reorder(denomination, percent_share), weight=percent_share)) +
   coord_flip() +
-  theme_wsj() +
+  theme_economist() +
   labs(
-    title = "Denominations with highest percent of megachurches",
-    x = "Denomination",
-    y = "Share of megachurches (%)",
-    caption = "Source: Hartford Institute for Religion Research"
+    title="Highest share of megachurches among denominations",
+    x = "denomination",
+    y = "percent share of megachurch",
+    caption = "source: Hartford Institute for Religion Research"
   )
 ```
 
@@ -106,7 +103,7 @@ denomination_totals |>
 
 Describe the pattern of results; are there particular months that stand out? What might explain the pattern you see?
 
-**A2.**
+**A2.** The month that obviously stands out to me is October, which has the highest peak on the line chart, with a total over 80,000. The second month that partially stands out to me is the middle of June, reaching nearly 55,000. I think this pattern can definitely be explained by election cycles, where October is the last month before any November election, which could result in more contributions during this time. Another trend that explains both of the highest amounts being in these months is that mid-June is when Kamala Harris announced she would be running for president in 2024, which would result in an influx of contributions, and maybe from new contributors that were not previously donating. 
 
 ```{r}
 clergy_amount_totals <- clergy_contribs_24 |>
@@ -155,7 +152,7 @@ To answer this question, do the following:
 6.  Add a label for each point that shows the county name using geom_text() - see some examples of its use at <https://ggplot2.tidyverse.org/reference/geom_text.html#ref-examples>. Try to make the names as easy to read as possible by avoiding overlap.
 7.  In the answer space below, describe what you see and answer the questions posed above. In a general sense, what do you think this means? Feel free to consider the actual raw values: how would you report out the main point(s) of this chart?
 
-**A3.**
+**A3.** To me, it does not seem like there is a strong relationship between median household income and adherents as a percent of the population within a Maryland county. This is because the wealthiest counties, such as Howard, Calvert and Montgomery, do not share a higher percentage of adherents within their respective counties. These counties are all within the midrange of the results for adherents as a percent of the population. However, with the straight line the graph seems to show some relationship. This relationship could possibly be that non-wealthy counties, like Worcester and Baltimore City, show a higher percent of people who are religious adherents. It seems that as a county decreases in wealth, the percentage of religious adherents increases. 
 
 ```{r}
 md_reli_census <- religion_census |> 
@@ -201,7 +198,17 @@ Using the megachurches data, create a histogram showing the distribution of chur
 
 In the answer space below, describe the shape of the distribution. Where do most megachurches cluster? Are there outliers? What does this tell you about what "megachurch" means in practice?
 
-**A4.**
+**A4.** It seems that the most megachurches cluster around a lower attendance size, near the zero mark. This could mean that megachurches actually have similar attendance records in comparison to "regular" churches. It seems that there is an outlier with around 10,000 church attendees. I think this tells me that megachurches are only named for their practices within the church, such as rock-style bands for worship and strobe lights, rather than the actual attendance within the church. 
 
 ```{r}
+mega_churches |> 
+  ggplot(aes(x = size)) + 
+  geom_histogram(binwidth = 10000, fill = "pink", color = "white") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Megachurch Attendance in the US",
+    x = "Attendance at Megachurches",
+    y = "Number of Churches",
+    caption = "Source: Hartford Institute for Religion Research"
+  )
 ```
