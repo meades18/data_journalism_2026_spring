@@ -66,13 +66,37 @@ Compare the results here to those from the pre_lab_08 bar chart of states by con
 **A1.**
 
 ```{r}
-mega_churches |>
+denomination_totals <- mega_churches |>
   group_by(denomination) |>
   summarise(
     count = n()
-  ) |> 
-  arrange(desc(denomination))
+  ) |>
+mutate(percent_share = count / sum(count) * 100) |>
+  arrange(desc(percent_share)) |> 
+  head(10)
+
+denomination_totals
 ```
+
+
+```{r}
+denomination_totals |>
+  ggplot() +
+  geom_bar(
+    aes(x = reorder(denomination, percent_share), y = percent_share),
+    fill = "steelblue", 
+  ) +
+  coord_flip() +
+  theme_wsj() +
+  labs(
+    title = "Denominations with highest percent of megachurches",
+    x = "Denomination",
+    y = "Share of megachurches (%)",
+    caption = "Source: Hartford Institute for Religion Research"
+  )
+```
+
+
 
 **Q2.** Let's visualize clergy political contributions over time using a line chart. Generate a dataframe with the total amount of contributions for each month, and then create a line chart to show the distribution of contributions over time. Your line chart must have:
 
@@ -153,11 +177,12 @@ md_combined |>
   geom_smooth(aes(x=adherents_as_percent_of_population, y=estimate), method="lm", se=FALSE) +
   geom_text(aes(x = adherents_as_percent_of_population, 
               y = estimate, 
-              label = county_name), 
+              label = county_name,
+              size = 2), 
           check_overlap = TRUE) +
   theme_minimal() +
   labs(
-    title="Religious Adherence across median household income by county",
+    title="Wealthier Maryland counties show moderate religious adherence",
     x = "adherents as % of population",
     y = "median income",
     caption = "source: U.S. Religion Census, 2021"
