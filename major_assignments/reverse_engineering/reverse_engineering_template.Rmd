@@ -53,7 +53,7 @@ In this notebook, we are reverse engineering five sentences from the story.
 
 * **Analysis summary**: For this sentence I tested the first half: "income barely budges the needle within traditions." I filtered the dataset to only show those who voted for Trump in the election. Then, I grouped by tradition and income, and counted the amount of votes for each income and tradition. I also created a system that follows a low, medium and high income scale. This sentence looks to test whether income barely budges the voting needle within traditions. For the most part, I believe this conclusion is proven by the results of my code. For example, White Evangelicals are often within the low to medium range, the White Mainline tradition is mainly in the medium range and Orthodox Christians are within the high range. 
 
-* **analysis part three**: RESPOND HERE
+* **analysis part three**: Looking at the results of my code, I will be using the Agnostic and Black Protestant denominations to test whether income barely budges the Trump vote percentage within traditions. For Agnostic voters, the percent of Trump votes does not budge that much, with those Under $40k having a percentage of 26.1%, those $40k-70k with 24.7% and $250K+ at 19.4%. I would say that income does not have that much of an effect on how Agnostic individuals vote since these numbers are fairly close to each other. For Black Protestants, the highest percentage is at 22% under the $70k - $120k income bracket, while the lowest percentage is at 5%, at $250k+. This is a way larger difference that could indicate that income does impact voting patterns within this tradition. 
 
 ```{r}
 religion_data <- religion_data |> 
@@ -91,6 +91,10 @@ For this, I wanted to first group the dataframe by income and tradition. Then I 
 
 * **Analysis summary part two**: First, I think I am missing something within my code that gives me the correct percentages of republican vote. I also am not too sure I completely understand what these percentages mean. However, for this code, I did the same thing where I used case_when to create income groups. I filtered the data into a new dataframe to only show the votes for Harris and Trump. Then, I grouped by tradition and income group, and found the republican percentage and the Harris percentage. This section of code found the percentages of the votes for each tradition. Additionally, to test whether the sentence's conclusion was true, I found the percentage of vote for Southern Baptists by filtering for the baptist value equals 1. On the other hand, I filtered for the tradition that equals Atheist and found those percentages, as well. Looking at the results of each of these steps, it seems there are larger than sixty percentage point gaps of the likelihood to vote Republican between Southern Baptists and Atheists.  
 
+
+* **Analysis summary part three**: As suggested for this sentence, I followed the same process for Sentence 1, where I filtered for both Trump and Harris votes, then mutated this dataframe to include income brackets. After this I grouped by tradition and income and found the correct weighted percentage of Trump votes. Looking at this now, I am kind of unsure why I have this first codeblock here since the actual reverse engineering of this sentence are the following two code chunks. 
+
+First, I filterd the religion data for Southern Baptists, using trad == 1, then I used the same line of code that I used in Sentence 1 and the previous code chunk to find the Trump percent for all Southern Baptists. To find these results for Atheists, I followed the exact same process. To comment on whether I correctly engineered this sentence, I will look at the percent for one person under the 120k-250k bracket from each denomination. For Southern Baptists, the percentage is 100% (so I think that something may be wrong in my code?), while the Trump percent for an Atheist in this same income bracket is 9.5%. This is a difference of around 91%, so I definitely think I am missing something since this result is far out from the chosen sentence. 
 
 
 ```{r}
@@ -139,10 +143,11 @@ religion_data |>
 ### Sentence 3
 
 * **Sentence text**: Trump pulled support from over 80% of white evangelicals and under 10% of Black Protestants
+
 * **Analysis summary 1**: For this sentence, I filtered the religion_data dataframe to show only votes for Harris and Trump. Then, I created a new data frame for Black Protestants, filtering the religion data to only show results for Black Protestants, then grouped by tradition and summarised finding the mean vote percentage. The result for this is 12.2%. For White Evangelicals, I did the same process, and the result was 78.1%. So, I would say the results of my code match mostly well with the sentence's conclusion. Both of the results are very close to the percentages within the sentence. 
 
 
-* **Analysis summary 2**: 
+* **Analysis summary 2**: As a result of my reverse engineering for this sentence, I was able to somewhat prove the claims made in the sentence.As suggested, I used similar code to what I had done in Sentence 2, and also included the weighted mean rather than the unweighted mean as I did in my first attempt. As a result of using the weighted mean, I can prove the first part of the sentence that Trump pulled support from over 80% of White Evangelicals, with my results giving a percentage of 84%. However, using the weighted mean for Black Protestants did not result in a percentage below 10% as the sentence claims. For both of my results with and without the weighted mean, the results are both above 10%, with 12.2% and 14.8%. This could be an error in my own code or a wrong assumption made by the journalist.    
 
 ```{r}
 # Put code to reverse engineer sentence here
@@ -177,26 +182,70 @@ white_evan
 
 ### Sentence 4
 
-* **Sentence text**: [Paste in sentence to engineer here]
-* **Analysis summary**: [Write up two to three sentences describing the results of your analysis.  Were you able to confirm the finding? If not, why not?]
+* **Sentence text**: For Latter-day Saints, the difference between the highest earners and the lowest is one percentage point. For white evangelicals, it’s 0.6%. For Black Protestants, just 0.5%.
+
+* **Analysis summary**: For this code, I first filtered the religion data to find all White Evangelicals (evan) and Black Protestants (prot) into its own dataframe evan_prot. Then I filtered this dataframe to show the minimum and maximum income brackets within the data, and after this I created a new dataframe with the White Evangelical and Black Protestant Trump vote percentages by the minimum and maximum income levels. I used the similar code that I used in sentence 2 to get my results, counting the total, then the trump percent. Looking at the results, the group with the highest percentage were the White Evangelicals with an income over $250k with 89%. The group with the lowest percentage, 5% were the Black Protestants under the $250k+ bracket. I actually find this pretty interesting that the higher brackets take the maximum and minimum percentages of these results. I think I am the most surprised by the Black Protestant vote of only 5% for those in the $250k bracket, mainly because it does not follow the same trend as White Evangelicals. 
+
+My last note is that I know this code can be done in a cleaner way, but this is the best that I could do. 
 
 ```{r}
 # Put code to reverse engineer sentence here
 
+evan_prot <- religion_data |> 
+  filter(trad %in% c("White Evangelical", "Black Protestant"))
+
+evan_prot_income <- evan_prot |> 
+  filter(income_bracket %in% c("Under $40k", "$250k+"))
+
+evan_prot_trump_pct <- evan_prot_income |> 
+  group_by(trad, income_bracket) |>
+  summarise(
+  total = n(),
+  trump_pct = round(weighted.mean(vote_2024 == 2, weight, na.rm = TRUE) * 100, 1), .groups = "drop" )
+
 # Display results of code below this codeblock
 
 ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Sentence 5
 
-* **Sentence text**: [Paste in sentence to engineer here]
-* **Analysis summary**: [Write up two to three sentences describing the results of your analysis.  Were you able to confirm the finding? If not, why not?]
+* **Sentence text**: Take Southern Baptists. Among those making under $40,000 a year, about two-thirds voted for Donald Trump. Among those earning between $80,000 and $120,000, that number rises to about 78%. 
 
+* **Analysis summary**: 
+I think I did this correctly, but I am honestly not too sure. My thinking was to filter by vote like I had done in the previous sentences, then filter like I have for Southern Baptists by trad == 1. To find the percentages of each income brackets vote for Trump, I used the similar code that I have used throughout this project, which is on the third chunk of code. As a result, I got the correct answers that correlate to the chosen sentence, where Southern Baptists in the Under $40k bracket have 67%, which is around two thirds of the vote, then those earning between 80,000 and 120000 received a percentage of 80%, which is close to 78%. I would assume that with margins of errors the claims made in the chosen sentence would correlate with my code. 
+
+
+
+* **Southern Baptist percentages** 
 ```{r}
 # Put code to reverse engineer sentence here
 
-# Display results of code below this codeblock
+trump_support <- religion_data |> 
+  filter(vote_2024 %in% c(1, 2)) 
 
+south_baptist_trump <- trump_support |> 
+  filter(baptist == 1) 
+
+south_baptist_trump <- south_baptist_trump |>  
+  group_by(income_bracket) |> 
+  summarise(
+    total = n(),
+    trump_pct = round(weighted.mean(vote_2024 == 2, weight, na.rm = TRUE) * 100, 1), .groups = "drop" )
+    
+# Display results of code below this codeblock
+south_baptist_trump
 ```
 
--30-
+
