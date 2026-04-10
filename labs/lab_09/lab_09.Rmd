@@ -40,17 +40,22 @@ You MUST do the following things when answering this question:
   * Easily readable labels and values
   * Be published
 
-Describe your thought process below — why you chose to make the chart you did — and add the URL of your chart.
+Describe your thought process below — why you chose to make the chart you did — and add the URL of your chart. 
 
-**A1.**
+**A1.** https://datawrapper.dwcdn.net/tZcQZ/1/ 
+
+So, my thought process for this was to find a chart that displayed the results for both the percentage of adherents and the diversity index. To do this, I chose the charts that had multiple lines, columns or bars, and ultimately chose the multiple columns chart, which displayed the results for both measurements. Then, in the refine section, I toggled on the setting that used independent scales for each value, which allowed the diversity index values to actually be displayed rather than the values being on the same scale as the adherence percentage. Previous to toggling this feature on, the visualization for the diversity index was barely noticeable. 
+
+Overall, I think this chart was the best choice to display the results of the data because it shows both the adherence percentages and the diversity index values. However, I do think it would be best to separate these two into independent charts since it makes the graphic look a little busy. Another note: I could not figure out how to change the labels (pct_adherence,etc.), so they remained the same; however, I think the best way to do this would be to use the rename function before writing the csv. 
 
 ```{r}
 
-state_reli <- read.csv("data/state_religion_comparison.csv") |> 
+state_reli <- read_csv("https://raw.githubusercontent.com/dwillis/datajournalismbook-religion/refs/heads/main/labs/lab_09/data/state_religion_comparison.csv") 
+
+mid_atlantic_states <- state_reli |> 
   filter(state %in% c("Maryland", "Virginia", "Pennsylvania", "Delaware", "New Jersey", "New York", "District of Columbia"))
 
-state_reli
-
+write_csv(mid_atlantic_states, "https://raw.githubusercontent.com/dwillis/datajournalismbook-religion/refs/heads/main/labs/lab_09/data/state_religion_comparison.csv")
 ```
 
 **Q2.** You're interested in seeing whether states that have higher rates of religious adherence also tend to be more or less religiously diverse. Using the `state_religion_comparison.csv` file, make a chart showing the relationship between the percentage of the population counted as religious adherents and the Diversity Index Value for all 50 states and DC. You'll need to make sure both columns are numeric in R, then export the CSV using `write_csv`, then make the chart in Datawrapper.
@@ -64,6 +69,7 @@ What do you think the story here is? Which states stand out as outliers? Put the
 **A2.**
 
 ```{r}
+state_religion <- read_csv("data/state_religion_comparison.csv")
 ```
 
 **Q3.** You want to understand the geography of religious adherence across the entire United States at the county level. To do that, you'll make a choropleth map in Datawrapper. You will need to:
