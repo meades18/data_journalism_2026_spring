@@ -203,7 +203,7 @@ In the answer space below, describe the shape of the distribution. Where do most
 ```{r}
 mega_churches |> 
   ggplot(aes(x = size)) + 
-  geom_histogram(binwidth = 10000, fill = "pink", color = "white") +
+  geom_histogram(binwidth = 1000, fill = "pink", color = "white") +
   theme_minimal() +
   labs(
     title = "Distribution of Megachurch Attendance in the US",
