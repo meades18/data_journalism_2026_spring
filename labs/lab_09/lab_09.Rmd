@@ -42,7 +42,7 @@ You MUST do the following things when answering this question:
 
 Describe your thought process below — why you chose to make the chart you did — and add the URL of your chart. 
 
-**A1.** https://datawrapper.dwcdn.net/aZrhQ/1/
+**A1.** https://datawrapper.dwcdn.net/M6k3n/1/ 
 
 So, my thought process for this was to find a chart that displayed the results for both the percentage of adherents and the diversity index. To do this, I chose the charts that had multiple lines, columns or bars, and ultimately chose the multiple columns chart, which displayed the results for both measurements. Then, in the refine section, I toggled on the setting that used independent scales for each value, which allowed the diversity index values to actually be displayed rather than the values being on the same scale as the adherence percentage. Previous to toggling this feature on, the visualization for the diversity index was barely noticeable. 
 
@@ -55,7 +55,7 @@ state_reli <- read_csv("data/state_religion_comparison.csv")
 mid_atlantic_states <- state_reli |> 
   filter(state %in% c("Maryland", "Virginia", "Pennsylvania", "Delaware", "New Jersey", "New York", "District of Columbia"))
 
-write_csv(mid_atlantic_states, "data/state_religion_comparison.csv")
+write_csv(mid_atlantic_states, "data/state_religion_comparison_filtered.csv")
 
 ```
 
@@ -67,10 +67,16 @@ HINT: In Datawrapper's "Check and Describe" tab, you can click on a column to ge
 
 What do you think the story here is? Which states stand out as outliers? Put the answer below along with the URL of your chart.
 
-**A2.**
+**A2.** https://datawrapper.dwcdn.net/z8Es1/2/ 
 
+Looking at the scatterplot, which displays the relationship between religious adherence and religious diversity, there is a positive relationship between the two variables. It seems that as religious diversity decreases, religious adherence increases. Obviously, Utah is a state that has very low religious diversity, but represents very high religious adherence. Other states, such as Louisiana and Alabama also show relatively low religious diversity and high religious adherence. An additional story here could be that the Catholic religion fluctuates in religious adherence. When I played around with the annotate section in Datawrapper, I first put labels as the largest body that showed the Catholic church, which is the majority of the states' largest body, fluctuating in religious adherence. The obvious outliers within the data are Utah and New Hampshire, which shows very high religious diversity and very low religious adherence. 
 ```{r}
-
+state_reli <- state_reli |>
+  mutate(
+    pct_adherents = as.numeric(str_remove(`pct_adherents`, "%")), 
+    diversity_index = as.numeric(str_remove(`diversity_index`, "%"))
+  ) 
+write_csv(state_reli, "data/state_religion_comparison_plot.csv")
 ```
 
 **Q3.** You want to understand the geography of religious adherence across the entire United States at the county level. To do that, you'll make a choropleth map in Datawrapper. You will need to:
@@ -87,7 +93,23 @@ What do you think the story here is? Which states stand out as outliers? Put the
 
 What do you think the story here is — what geographic patterns stand out, and what would you want to know more about? Put the answer below along with the URL of your map.
 
-**A3.**
+**A3.** https://datawrapper.dwcdn.net/AOQnx/1/ 
+
+The biggest geographic pattern that I notice here is that the Midwest and South show very high religious adherence. However, I think the story here is that the Midwest has high religious adherence, which is not that expected compared to Southern states. Looking at my own state, Kentucky, this pattern sort of becomes clear; the further west you go, the more religious adherence there is. Furthermore, one thing that I would like to know more about is the relationship between political party of each county and religious adherence, and whether there is any correlation. I think this could be something interesting to look at and goes into the question of how political values may impact religious adherence, values and practices, and how they may be central to voting patterns. 
+
 
 ```{r}
+county_religion <- read_csv("data/county_religion_choropleth.csv") 
 ```
+```{r}
+county_religion <- county_religion |> 
+  mutate(
+    pct_adherents = as.numeric(str_remove(`pct_adherents`, "%")),
+    diversity_index = as.numeric(str_remove(`fips`, ","))
+  ) |> 
+   mutate(fips = str_pad(fips, width = 5, pad = "0")) 
+  
+
+write_csv(county_religion, "data/county_religion_map.csv")
+```
+
