@@ -1,0 +1,205 @@
+---
+title: "lab_10"
+author: "Madison Eades"
+date: "2025-04-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## You will need
+
+-   Our usual libraries, plus some of the map-specific ones from the pre_lab. You'll also be fetching Census data in Q3. Read the questions carefully!
+
+## Load libraries and establish settings
+
+**Task** Create a codeblock and load appropriate packages and settings for this lab.
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(sf)
+library(janitor)
+library(tidycensus)
+library(tigris)
+```
+
+Let's explore religious life in Maryland and make some maps!
+
+## Questions 
+
+two maps and compare, USE THE SAME DATGAFRAME 
+
+**Q1.** Let's look at the relationship between the number of congregations in a county and its number of adherents. Using the `md_religion_choropleth.csv` file in the data folder, calculate two rates for each county: congregations per 10,000 population and adherents per 10,000 population. You'll need to use tidycensus to get county population data for Maryland (the variable for total population is B01001_001; use 2021 and be sure to get the geometry, too).
+
+Join the religion data to the population data, calculate both rates, then rank each county by both rates and calculate the difference in rankings. A county that ranks high on congregations but low on adherents has many small churches; the reverse suggests fewer but larger ones.
+
+Make a county-level choropleth map of the congregations per 10,000 rate AND a second map of the adherents per 10,000 rate. What patterns do you see? Which counties have many small congregations vs. fewer large ones?
+
+**A1.**  One pattern that I noticed when comparing the rate of congregations per 10,000 people and the adherents per 10,000 people is that it seems the counties with higher religious congregations have lower adherence rates. For example, looking at Garrett County on the congregation rate map, there is a high percentage of congregations per 10,000 people; however, the adherence rate map shows that there is low adherence for this county. On the flip side, another pattern that I notice is that some counties have a higher adherence percentage with a low congregation rate.
+This can be seen in Montgomery and Prince George's Counties. 
+
+```{r}
+md_religion <- read_csv("data/md_religion_choropleth.csv") 
+```
+
+```{r}
+md_county_population <- get_acs(geography = "county",
+              variables = c(population = "B01001_001"),
+              year = 2021,
+              state = "MD",
+              geometry = TRUE)
+```
+```{r}
+md_county_population <- md_county_population |>
+  mutate(county = str_to_title(str_remove_all(county,", Maryland"))) |>
+  mutate(county = str_trim(county,side="both")) |>
+  select(county, population, geometry)
+
+
+md_pop_with_religion <- md_county_population |>
+  left_join(md_religion, join_by(county == `County Name`)) |>
+  mutate(congregations_rate = Congregations/population*10000,
+         adherents_rate = Adherents/population*10000) 
+
+md_pop_with_religion
+```
+```{r}
+ggplot() +
+  geom_sf(data=md_pop_with_religion, aes(fill=congregations_rate)) +
+  theme_minimal() +
+  scale_fill_viridis_b(option="magma",trans = "log")
+```
+```{r}
+ggplot() +
+  geom_sf(data=md_pop_with_religion, aes(fill=adherents_rate)) +
+  theme_minimal() +
+  scale_fill_viridis_b(option="magma",trans = "log")
+```
+
+
+
+**Q2.** Using the `churches_md.csv` and the Maryland zip code shapefile in the data folder, perform spatial joins to identify churches in Baltimore City and in Montgomery County, then make choropleth maps showing church counts by zip code for each jurisdiction.
+
+Here's the process to follow (similar to what you did in pre_lab_10):
+
+1. Load the churches CSV and the Maryland zip code shapefile (both in this lab's data folder). Load Maryland county boundaries using `counties()` from tigris.
+2. For each jurisdiction (Baltimore City, then Montgomery County), filter the county boundaries to that jurisdiction and use `st_transform()` to make the CRS match the zip shapefile.
+3. Use `st_join()` to find which zip codes fall within each jurisdiction's boundary.
+4. Filter the churches data to only those zip codes, then count churches per zip code with `group_by()` and `summarise()`.
+5. Join the counts back to the zip code spatial data and map it with `geom_sf()`.
+6. Use the same color scale for both maps so they're directly comparable — calculate the max church count across both jurisdictions first and pass it to `scale_fill_viridis_b()` via `limits`.
+
+What's the story about church density in an urban jurisdiction (Baltimore City) vs. a suburban one (Montgomery County)? Where are the clusters, and what might explain the differences?
+
+**A2.**
+
+```{r}
+churches_md <- read_csv("data/churches_md.csv")
+
+md_zips <- st_read("data/md_zips/BNDY_ZIPCodes11Digit_MDP.shp")
+
+counties <- counties()
+
+md_counties <- counties |>
+  filter(STATEFP == "24")
+
+mont_county <- md_counties |>
+  filter(NAME == "Montgomery") |>
+  st_transform(crs = st_crs(md_zips))
+
+balt_city <- md_counties |>
+  filter(NAMELSAD == "Baltimore city") |>
+  st_transform(crs = st_crs(md_zips))
+
+
+balt_zips <- st_join(md_zips, balt_city, join = st_intersects) |>
+  filter(!is.na(NAMELSAD))
+
+mont_zips <- st_join(md_zips, mont_county, join = st_intersects) |>
+  filter(!is.na(NAME))
+
+```
+```{r}
+balt_churches <- churches_md |>
+  mutate(zip5 = as.character(zip5)) |>
+  filter(zip5 %in% balt_zips$ZIPCODE1)
+
+balt_church_counts <- balt_churches |>
+  group_by(zip5) |>
+  summarise(church_count = n())
+
+balt_churches_sf <- balt_zips |>
+  left_join(balt_church_counts, by = c("ZIPCODE1" = "zip5"))
+
+balt_churches_sf
+```
+
+```{r}
+ggplot() +
+  geom_sf(data=balt_city) +
+  geom_sf(data=balt_churches_sf, aes(fill=church_count)) +
+  scale_fill_viridis_b(option="magma",trans = "log") +
+  theme_minimal() +
+  labs(title="Churches in Baltimore City by Zip Code",
+       fill="Number of\nChurches")
+```
+
+
+
+```{r}
+mont_churches <- churches_md |>
+  mutate(zip5 = as.character(zip5)) |>
+  filter(zip5 %in% mont_zips$ZIPCODE1)
+
+mont_church_counts <- mont_churches |>
+  group_by(zip5) |>
+  summarise(church_count = n())
+
+mont_churches_sf <- mont_zips |>
+  left_join(mont_church_counts, by = c("ZIPCODE1" = "zip5"))
+```
+
+```{r}
+ggplot() +
+  geom_sf(data=mont_county) +
+  geom_sf(data=mont_churches_sf, aes(fill=church_count)) +
+  scale_fill_viridis_b(option="magma",trans = "log") +
+  theme_minimal() +
+  labs(title="Churches in Montgomery County by Zip Code",
+       fill="Number of\nChurches")
+```
+
+
+**Q3.** Is there a relationship between religious adherence and political voting patterns? Using the `md_statewide_county.csv` file in the data folder (which has 2022 gubernatorial election results), use the percentage of the vote won by Dan Cox (the Republican candidate) in each county. Then join that to the religion data from Q1, which should already have the congregations per 10,000 rate and the adherent percentage.
+
+Make a county-level choropleth map of the Cox vote percentage AND a second map of the congregations per 10,000 rate (or adherent percentage). Compare the two maps. Do counties with higher rates of religious congregations tend to vote more Republican? What are the exceptions, and what might explain them? What additional data would you want to explore this further?
+
+HINT: The election data has a GEOID column and the religion data has a FIPS column -- these should match.
+
+**A3.**
+
+```{r}
+md_statewide <- read_csv("data/md_statewide_county.csv")
+
+md_statewide_religion <- md_statewide |>
+  left_join(md_pop_with_religion, by = c("GEOID" = "FIPS"))
+
+ggplot() +
+  geom_sf(data=md_statewide_religion, aes(fill=PctCox)) +
+  theme_minimal() +
+  scale_fill_viridis_b(option="magma",trans = "log")
+```
+
+**Q4.** You've been assigned a story about the relationship between demographics and religious life in Maryland. Use tidycensus to retrieve a demographic variable of your choice at the county level for Maryland with geometry -- for example, percent of the population that is Black (B02001_003 divided by B01001_001), median age (B01002_001), or percent with a bachelor's degree (B15003_022 divided by B15003_001). You can pick any variable you think would be interesting.
+
+Join that demographic data to the religion data from Q1 (or reload it). Make a county-level choropleth of your chosen demographic variable AND a second map of a religion variable (adherents rate, congregations rate, or adherent percentage). Compare the two maps.
+
+What geographic patterns do you see? Do any counties stand out as having an unexpected combination of high/low demographics and high/low religious adherence? What would your next reporting steps be?
+
+**A4.**
+
+```{r}
+```
