@@ -94,7 +94,7 @@ Here's the process to follow (similar to what you did in pre_lab_10):
 
 What's the story about church density in an urban jurisdiction (Baltimore City) vs. a suburban one (Montgomery County)? Where are the clusters, and what might explain the differences?
 
-**A2.**
+**A2.** Some of the clusters that I notice in Baltimore City is that the church density seems to fall in the western jurisdictions, closer to the county line. Additionally, the jurisdiction with the highest congregations is also in the western part of the county. I also think it is interesting that there is only one jurisdiction within the county that has a high church density. On the other hand, Montgomery County shows rather similar church density among jurisdictions, with many of the jurisdictions falling in the midrange for church density. I think the story here is that there is a rather diverse church density throughout Baltimore City in comparison to Montgomery County. For Baltimore City, there is a diverse range of church density throughout the county, although, many of them have relatively high church density. As I mentioned previously, Montgomery County has majority of the jurisdictions fall within the high-midrange for church density, suggesting a more consistent value of churches throughout the county in comparison to Baltimore City. One note: I do think my comparison is a little off because the maps are on different scales based on their population. 
 
 ```{r}
 churches_md <- read_csv("data/churches_md.csv")
@@ -179,7 +179,7 @@ Make a county-level choropleth map of the Cox vote percentage AND a second map o
 
 HINT: The election data has a GEOID column and the religion data has a FIPS column -- these should match.
 
-**A3.**
+**A3.** For the most part, the counties that have high levels of congregations also show a relatively high republican percentage. Counties like Garrett, Allegany and Washington all show high to relatively high congregations rate, while all sharing a high percentage of voting for Cox. Therefore, it can be said that the counties with higher congregation rates also show a higher percentage of voting republican. However, Baltimore County is somewhat of an outlier. This county shows a relatively high percentage of voting republican, while having a very low congregation rate. This could be explained by the fact that the county is more of a suburban area compared to Baltimore City, which could mean that the people in the area lean more republican or moderate compared to those in urban areas. Something I would like to explore further in this data is how the median age of these counties impact the percentage of voting republican. It is an intuitive assumption that older people may vote more conservatively; however, this could not be the case in some areas. 
 
 ```{r}
 md_statewide <- read_csv("data/md_statewide_county.csv")
@@ -207,17 +207,35 @@ Join that demographic data to the religion data from Q1 (or reload it). Make a c
 
 What geographic patterns do you see? Do any counties stand out as having an unexpected combination of high/low demographics and high/low religious adherence? What would your next reporting steps be?
 
-**A4.**
+**A4.** For my story, I looked at adherents_rate and median age for each county within Maryland. One geographic pattern that I notice is that the younger the median age is it seems the higher the adherence rate is. For example, looking at Montgomery County the median age is around 40, while the adherence rate is relatively high, and for Carroll County that has a higher median age, there is lower adherence. This pattern is seen throughout the northern counties. Overall, this pattern could suggest a counter-intuitive belief that older people go to church more than younger people. However, some of the counties that stood out to me was Worcester, which has both a high median age and high adherence rate. As my next step in reporting for this story, I would look into the median age for churches within these counties to see if the pattern is consistent with the statewide county results. 
 
 ```{r}
 md_county_age <- get_acs(geography = "county",
               variables = c(population = "B01002_001"),
               year = 2021,
-              state = "MD",
-              geometry = TRUE) 
+              state = "MD")
+
+md_county_age <- md_county_age |>
+  mutate(GEOID = as.numeric(GEOID))
 
 md_statewide_age <- md_pop_with_religion |>
   left_join(md_county_age,
     by = c("FIPS" = "GEOID")
   )
 ```
+
+```{r}
+ggplot() +
+  geom_sf(data=md_statewide_age, aes(fill=adherents_rate)) +
+  theme_minimal() +
+  scale_fill_viridis_b(option="magma",trans = "log")
+```
+
+
+```{r}
+ggplot() +
+  geom_sf(data=md_statewide_age, aes(fill=estimate)) +
+  theme_minimal() +
+  scale_fill_viridis_b(option="magma",trans = "log")
+```
+
