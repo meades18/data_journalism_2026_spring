@@ -184,14 +184,22 @@ HINT: The election data has a GEOID column and the religion data has a FIPS colu
 ```{r}
 md_statewide <- read_csv("data/md_statewide_county.csv")
 
-md_statewide_religion <- md_statewide |>
-  left_join(md_pop_with_religion, by = c("GEOID" = "FIPS"))
+md_statewide_religion <- md_pop_with_religion |>
+  left_join(md_statewide, by = c("FIPS" = "GEOID"))
 
 ggplot() +
   geom_sf(data=md_statewide_religion, aes(fill=PctCox)) +
   theme_minimal() +
   scale_fill_viridis_b(option="magma",trans = "log")
 ```
+
+```{r}
+ggplot() +
+  geom_sf(data=md_statewide_religion, aes(fill=congregations_rate)) +
+  theme_minimal() +
+  scale_fill_viridis_b(option="magma",trans = "log")
+```
+
 
 **Q4.** You've been assigned a story about the relationship between demographics and religious life in Maryland. Use tidycensus to retrieve a demographic variable of your choice at the county level for Maryland with geometry -- for example, percent of the population that is Black (B02001_003 divided by B01001_001), median age (B01002_001), or percent with a bachelor's degree (B15003_022 divided by B15003_001). You can pick any variable you think would be interesting.
 
@@ -202,4 +210,14 @@ What geographic patterns do you see? Do any counties stand out as having an unex
 **A4.**
 
 ```{r}
+md_county_age <- get_acs(geography = "county",
+              variables = c(population = "B01002_001"),
+              year = 2021,
+              state = "MD",
+              geometry = TRUE) 
+
+md_statewide_age <- md_pop_with_religion |>
+  left_join(md_county_age,
+    by = c("FIPS" = "GEOID")
+  )
 ```
