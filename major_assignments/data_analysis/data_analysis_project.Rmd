@@ -1,0 +1,78 @@
+---
+title: "data_analysis_project"
+name: "Madison Eades"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+
+
+##Loading libraries
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+```
+--> question: payments <- Do the top clergy donors also give to Maryland state campaigns? 
+
+##getting the data 
+```{r}
+clergy_contribs_2018 <- read_csv("data/clergy_contribs_2018.csv")
+clergy_contribs_2020 <- read_csv("data/clergy_contribs_2020.csv")
+clergy_contribs_2022 <- read_csv("data/clergy_contribs_2022.csv")
+clergy_contribs_2024 <- read_csv("data/clergy_contribs_2024.csv")
+```
+
+```{r}
+clergy_contribs_combined <- bind_rows(list(clergy_contribs_2018, clergy_contribs_2020, clergy_contribs_2022, clergy_contribs_2024))
+View(clergy_contribs_combined)
+```
+
+```{r}
+clergy_totals <- clergy_contribs_combined |>
+  group_by(contributor_name,two_year_transaction_period) |>
+  summarize(
+    total_amount = sum(contribution_receipt_amount),
+    num_contributions = n(),
+  ) |>
+arrange(desc(total_amount))
+
+clergy_totals 
+```
+## totaling up ACTBLUE contributions 
+
+```{r}
+act_blue <- clergy_contribs_combined |> 
+  filter(committee_name == "ACTBLUE") |> 
+  group_by(committee_name, contributor_name, contribution_receipt_amount) |>
+  summarise(total_amount = sum(contribution_receipt_amount, na.rm = TRUE)) |>
+  arrange(desc(total_amount))
+act_blue
+```
+
+##totaling up DONALD J. TRUMP FOR PRESIDENT, INC. contributions 
+```{r}
+trump_contribs <- clergy_contribs_combined |> 
+  filter(committee_name == "DONALD J. TRUMP FOR PRESIDENT, INC.") |> 
+  group_by(committee_name, contributor_name, contribution_receipt_amount) |>
+  summarise(total_amount = sum(contribution_receipt_amount, na.rm = TRUE)) |>
+  arrange(desc(total_amount))
+trump_contribs
+```
+
+```{r}
+cycle_counts <- clergy_contribs_combined |>
+  group_by(contributor_name) |>
+  summarize(cycles_contributed = n_distinct(two_year_transaction_period))
+```
+
+```{r}
+cycle_counts |> 
+  filter(cycles_contributed > 3) |> 
+  arrange(desc(cycles_contributed)) |>
+  head(10)
+```
+
+So far, I think I found some baseline results needed to answer my question of wo the top donors are and whether they contribute to Maryland campaigns. I have calculated the total amount contributed by a two year transaction period for the entire data frame. The results of this show that John Price has donated contributed twice among the top contributors, and Doris Cowan as the top contributor. After I found these top donors within the clergy contribution data, I used the Maryland campaign contribution website to search for the names listed under the top 10 clergy contributors, and six of the ten contributors were listed once or multiple times. I think my next step is to get a hold of the campaign data to further confirm that these clergy contributors have donated to Maryland campaigns. One thing that I think will be an issue is the timeframes of my data frames, whereas I have information for clergy contributions for 2018, 2020, 2022 and 2024, so I will need these years for campaign contribution data. 
+
