@@ -1,0 +1,509 @@
+---
+title: "pre_lab_11.Rmd"
+author: "madison eades"
+date: "2026-04-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# An intro to text analysis
+
+Throughout this course, we've been focused on finding information in structured data. We've learned a lot of techniques to do that, and we've learned how the creative mixing and matching of those skills can find new insights.
+
+What happens when the insights are in unstructured data? Like a block of text?
+
+Turning unstructured text into data to analyze is a whole course in and of itself -- and one worth taking if you've got the credit hours -- but some simple stuff is in the grasp of basic data analysis.
+
+To do this, we'll need a new library -- [tidytext](https://cran.r-project.org/web/packages/tidytext/vignettes/tidytext.html), which you can guess by the name plays very nicely with the tidyverse. So install it in the console with `install.packages("tidytext")` and we'll get rolling.
+
+### Task 1: Load libraries and settings
+
+**Task** Run the following code in the gray-colored codeblock below to load the libraries we'll use.
+
+```{r}
+#install.packages("tidytext")
+library(tidyverse)
+library(tidytext)
+library(janitor)
+library(lubridate)
+```
+
+Here's the question we're going after: **what do local congregations actually talk about on Sunday mornings, and how does that vary by denomination and by individual preacher?**
+
+To answer that, we'll use a dataset of sermons scraped from four congregations in the DC/Maryland area: Cheverly Baptist Church, Kettering Baptist Church, Hyattsville Mennonite Church, and Paint Branch Unitarian Universalist Church. They represent very different theological traditions, which makes for interesting comparisons.
+
+### Task 2: Read in data
+
+**Task** Run the following code. Which church has the most sermons and which has the fewest? Given the size gap, name one comparison you think this data will support cleanly, and one you'd be careful about making. **Answer**
+
+```{r}
+sermons <- read_rds("data/sermons.rds")
+
+sermons |> count(church, sort = TRUE)
+```
+
+Note that the two Baptist churches don't have dates recorded -- they were scraped from sites that didn't publish the sermon date -- so time-based analysis will be limited to Hyattsville Mennonite and Paint Branch UUC.
+
+Before counting words, we want to clean up the `full_text` column. Let's strip out URLs and also newline characters that can confuse tokenization:
+
+### Task 3: Clean the text
+
+**Task** Run the following code.
+
+```{r}
+sermons <- sermons |>
+  mutate(full_text = gsub("http\\S+", "", full_text)) |>
+  mutate(full_text = gsub("[\r\n]+", " ", full_text))
+```
+
+If you are trying to create a list of unique words, R will treat differences in capitalization as unique and also will include punctuation by default, even using its `unique` function:
+
+### Task 4: Trying out unique
+
+**Task** Before you run the code, predict what the output will be. Then run it. What does `unique` do well here, and what does it miss that you'd need to fix before applying it to real sermon text? **Answer** The unique function finds only one word for each unique word listed in the dataset. 
+
+```{r}
+a_list_of_words <- c("Grace", "grace", "grace", "love", "love", ",")
+unique(a_list_of_words)
+```
+
+Fortunately, this is a solved problem with tidytext, which has a function called `unnest_tokens` that will convert the text to lowercase and remove all punctuation. The way that `unnest_tokens` works is that we tell it what we want to call the field we're creating with this breaking apart, then we tell it what we're breaking apart -- what field has all the text in it. For us, that's the `full_text` column:
+
+### Task 5: Trying out unnest_tokens
+
+**Task** Run the following code. How many rows does `unique_words` have, and what does each row represent? Roughly how many rows came out of one sermon on average (you have 1,233 sermons)? **Answer** Roughly 500,000 rows per one sermon. 
+
+```{r}
+unique_words <- sermons |>
+  select(church, speaker, date, full_text) |>
+  unnest_tokens(word, full_text)
+
+unique_words
+```
+
+### Task 6: Make a column chart
+
+**Task** Run the following code. Without reading ahead, pick three words from the top 25 that you think tell us nothing useful about what any sermon is *about*. Those three words are the start of your own stop-words list -- the next task will introduce a ready-made one so you can compare. **Answer** Three words: This, the, we. 
+
+Now we can look at the top words in this dataset. Let's limit ourselves to making a plot of the top 25 words, and we'll use the function `count` to do the counting:
+
+```{r}
+unique_words |>
+  count(word, sort = TRUE) |>
+  top_n(25) |>
+  mutate(word = reorder(word, n)) |>
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+  labs(x = "Count",
+       y = "Unique words",
+       title = "Top 25 words in local sermons")
+```
+
+Well, that's a bit underwhelming - a lot of very common (and short) words. This is a solved problem in working with text data: words like "a" and "the" are known as "stop words". In most cases you'll want to remove them from your analysis since they are so common. Tidytext provides a dataframe of them.
+
+But here's the thing: the generic stop words list was built for generic text. Our sermons have their *own* category of extremely common words that aren't informative -- "god," "jesus," "church," "today," "sunday." If you don't strip those out, every church will look the same. If you strip too many, you lose the signal. That trade-off is the whole craft of text analysis, and you'll feel it in this lab.
+
+### Task 7: Load the stop words
+
+**Task** Run the following code. Look over the `sermon_stops` list carefully -- we're going to use it for most of the lab, and some of these choices are debatable.
+
+```{r}
+data("stop_words")
+
+sermon_stops <- tibble(word = c(
+  # universal sermon vocabulary -- present everywhere, tells us little
+  "god", "jesus", "christ", "lord", "spirit", "holy",
+  "church", "faith", "bible", "scripture", "gospel",
+  "amen", "prayer", "pray", "prayers", "sermon",
+  # sermon discourse markers
+  "today", "morning", "week", "weeks", "sunday",
+  "read", "reading", "hear", "heard", "hearing",
+  "say", "said", "tell", "told", "ask", "asked",
+  "time", "times", "day", "days", "life", "lives", "world",
+  "people", "one", "us", "we're", "we've", "i'm", "don't", "it's", "that's", "it’s", "i’m","uu","god's", 
+  # transcript cleanup
+  "chevrolet", "uh",
+  # numbers and artifacts
+  "1", "2", "3", "4", "5", "10", "14"
+), lexicon = "sermon")
+
+stop_words <- stop_words |>
+  bind_rows(sermon_stops)
+```
+
+Then we're going to use a function we haven't used yet called an `anti_join`, which filters out any matches. So we'll `anti_join` the stop words and get a list of words that aren't stop words.
+
+From there, we can get a simple word frequency by just grouping them together and counting them.
+
+### Task 8: Using anti_join
+
+**Task** Run the following code and describe the results. Is it more interesting than before? Are there words in the top 50 that you'd consider adding to `sermon_stops`? Are there words in `sermon_stops` you think should NOT have been removed, and why? **Answer** In the results, there are words that do not appear in the sermon_stops list, so these words can give us a better idea on what a sermon is about. The words I would consider adding to the list is god's, which would not tell someone much about a sermon. I do not think there are words in sermon_stops that should not have been removed because these words are mainly universal in a church sermon, so they would not provide any good information. 
+
+```{r}
+unique_words |>
+  anti_join(stop_words) |>
+  count(word, sort = TRUE) |>
+  mutate(percent = (n / sum(n)) * 100) |>
+  top_n(50, n)
+```
+
+## Comparing across churches
+
+Raw counts from all four churches mashed together hide the most interesting thing in this data: the churches don't sound alike. Let's split by church.
+
+### Task 9: Top words per church
+
+**Task** Run the following code and describe what jumps out. Which words appear in one church's top list but not another's? What might that tell you about the congregation's focus? **Answer** A word that appears in the Cheverly Baptist Church's list is the word "verse", which does not appear in the Hyattsville Mennonite Church's list. I found this interesting because it seems that verse would be a common word used amongst all of the churches. 
+
+```{r}
+unique_words |>
+  anti_join(stop_words) |>
+  count(church, word, sort = TRUE) |>
+  group_by(church) |>
+  slice_max(n, n = 10) |>
+  ungroup()
+```
+
+Raw counts are fine, but they're biased toward common words. A more journalistically interesting question is: **what words are distinctive to each church?** That's what TF-IDF (term frequency-inverse document frequency) measures. A word scores high if it's frequent in one document (here, one church's sermons) but rare in the others.
+
+### Task 10: TF-IDF across churches
+
+**Task** Run the following code. For each church, pick one distinctive word from its TF-IDF top 10 and write a one-sentence guess about what sermon context you'd find it in. (You'll have a chance to check one of those guesses in Task 11.) **Answer** 
+
+For Cheverly Baptist church, I think the word Paul tells us that the sermon was based on the messages of Paul in the Bible possibly focusing on salvation through Christ. 
+
+For Hyattsville Mennonite, I think the word kindom suggests a more inclusive way of viewing the word kingdom, which removes all of the royal connotations of the word. 
+
+For Kettering Baptist Church, I think the word christman could refer to a sermon teaching how to be Christ-like, and live a life of faith that deems someone as a christman. However, this could also be a typo for Christian, but maybe not. 
+
+For Paint Branch Unitarian Universalist Church, I think the word universalism is a very important word found in this church's list that is not found in others. I believe this could signify that a sermon was about the main priniples the church follows. 
+
+
+
+```{r}
+church_tfidf <- unique_words |>
+  anti_join(stop_words) |>
+  count(church, word) |>
+  bind_tf_idf(word, church, n) |>
+  arrange(desc(tf_idf))
+
+church_tfidf |>
+  group_by(church) |>
+  slice_max(tf_idf, n = 10) |>
+  ungroup()
+```
+
+## Going beyond a single word
+
+The next step in text analysis is using `ngrams`. An `ngram` is any combination of words that you specify. Two-word ngrams are called bigrams (bi-grams). Three would be trigrams. And so on.
+
+The code to make ngrams is similar to what we did above, but involves some more twists.
+
+This block is going to do the following:
+
+1. Use the sermons data we created above.
+2. Unnest the tokens again, but this time create a field called `bigram`, and specify that the tokens are ngrams of 2.
+3. Split the bigrams into word1 and word2 to make filtering easier.
+4. Filter out stopwords in both word1 and word2.
+5. Paste the bigram back together so we can group and count it.
+6. Group, count, and calculate a percent.
+
+### Task 11: Top bigrams per church
+
+**Task** Run the following code and describe the results. Compare the bigrams to the single-word TF-IDF results in Task 10 -- which is more revealing? **Answer** In my opinion, the bigrams are a more revealing way to understand the content matter of a specific sermon. For example, in the Cheverly Baptist Church's TF-IDF list, there are names of disciples, which could give us a general picture of the sermon but does not give us the exact contents. On the other hand, the bigram list gives us a list of verses with the number, which could be useful in narrowing down the theme of a sermon. Overall, I think in the context of trying to understand what a sermon is about, the bigram does a better job at revealing some themes of each church. 
+
+```{r}
+sermons |>
+  unnest_tokens(bigram, full_text, token = "ngrams", n = 2) |>
+  separate(bigram, c("word1", "word2"), sep = " ") |>
+  filter(!word1 %in% stop_words$word) |>
+  filter(!word2 %in% stop_words$word) |>
+  filter(!is.na(word1), !is.na(word2)) |>
+  mutate(bigram = paste(word1, word2, sep = " ")) |>
+  count(church, bigram, sort = TRUE) |>
+  group_by(church) |>
+  slice_max(n, n = 10) |>
+  ungroup()
+```
+
+## Comparing preachers within a church
+
+Hyattsville Mennonite has two preachers with enough sermons to compare: Cynthia Lapp (65 sermons) and Michelle Burkholder (22). Do they have different vocabularies?
+
+### Task 12: Compare two preachers
+
+**Task** Run the following code and describe any differences you see. If you were a reporter covering this congregation, what would you follow up on? **Answer** As a reporter, the main thing that I would follow up on for this specific congregation is why nationalism is mentioned so much within their teachings. I am interested to know whether their sermons are politically based, and what exactly nationalism has to do with their specific teachings. In the list below and in the list above, nationalism is mentioned a plethora of times, which could be interesting to understand the exact context of the word in their teachings. 
+
+```{r}
+hm_preachers <- unique_words |>
+  filter(church == "Hyattsville Mennonite",
+         speaker %in% c("Cynthia Lapp", "Michelle Burkholder")) |>
+  anti_join(stop_words) |>
+  count(speaker, word) |>
+  bind_tf_idf(word, speaker, n) |>
+  arrange(desc(tf_idf))
+
+hm_preachers |>
+  group_by(speaker) |>
+  slice_max(tf_idf, n = 15) |>
+  ungroup()
+```
+
+## Elections and politics from the pulpit
+
+Few topics test the line between pastoral and political like elections. Sermons aren't supposed to be campaign speeches, but many preachers do talk about voting, candidates, and democracy -- and *how* they do it varies enormously by tradition. Let's dig in.
+
+We'll define a vocabulary of election- and politics-related words and look at them from three angles: how much each church uses them, how those mentions move over time, and what two-word phrases surround them.
+
+### Task 13: Which churches talk about politics the most?
+
+First, how much does each church use election/politics vocabulary, relative to the total number of words they preach? A raw count is misleading -- Cheverly Baptist has more total words than Hyattsville Mennonite, so of course it has more of everything. We want a *rate*: mentions per 10,000 words.
+
+**Task** Run the following code. Which church uses this vocabulary most heavily? Does the ranking surprise you given what you know about these traditions? **Answer** The church that mentions this vocabulary the most is the Paint Branch Unitarian Universalist Church. Given what I have researched about the Universalist church, the results do not surprise me since their principles are focused on inclusivity and leftist teachings. Additionally, it does not surprise me at all that both Baptist churches are ranked at the bottom of the list since this denomination is known to be more right leaning or stay out of politics altogether.
+
+```{r}
+election_words <- c(
+  "election", "elections", "vote", "voted", "votes", "voting",
+  "voter", "voters", "ballot", "ballots",
+  "candidate", "candidates", "campaign",
+  "democracy", "democratic", "republican",
+  "political", "politics", "politician", "politicians",
+  "president", "presidential",
+  "trump", "biden", "harris", "obama", "clinton", "bush", "kamala"
+)
+
+church_totals <- unique_words |>
+  count(church, name = "total_words")
+
+unique_words |>
+  filter(word %in% election_words) |>
+  count(church, name = "election_mentions") |>
+  left_join(church_totals, by = "church") |>
+  mutate(per_10k_words = round(election_mentions / total_words * 10000, 1)) |>
+  arrange(desc(per_10k_words))
+```
+
+### Task 14: Election mentions over time at Paint Branch UUC
+
+Paint Branch UUC has sermon dates from 1999 through 2017 -- spanning five presidential elections (2000, 2004, 2008, 2012, 2016). Let's see how the vocabulary moves with the calendar.
+
+**Task** Run the following code. Three things to describe: (1) which words spike in which years, (2) what's happening with the word "trump" specifically, and (3) what does the 2016 spike look like compared to earlier election years? **Answer** The words that spiked were "political" in 2006, "democracy" in 2008 and "trump" in 2016. I believe the reason for the spike in the word "trump" in 2016 can be contributed to him running for president for the first time in this year, which for the Universalist Church could mean he was going against their teachings. What I found very interesting looking at past election years compared to 2016 is that the mention of the word "president" actually declines in 2012 and again in 2008. Furthermore, the mention of Trump in other election years is pretty miniscule from 2004-2008, then makes a large jump in 2012. This could possibly be when Trump began voicing political opinions nationally, and also going against Obama. 
+
+```{r}
+pbuuc_track <- c("election", "vote", "president", "political",
+                 "bush", "obama", "trump", "democracy")
+
+unique_words |>
+  filter(church == "Paint Branch Unitarian Universalist Church",
+         !is.na(date),
+         word %in% pbuuc_track) |>
+  mutate(year = year(date)) |>
+  count(year, word) |>
+  ggplot(aes(x = year, y = n, color = word)) +
+  geom_line(linewidth = 1) +
+  geom_point() +
+  scale_x_continuous(breaks = seq(1999, 2017, 2)) +
+  labs(title = "Election-related words in Paint Branch UUC sermons, 1999-2017",
+       subtitle = "Dotted lines mark presidential election years",
+       x = "Year", y = "Mentions",
+       color = "Word") +
+  geom_vline(xintercept = c(2000, 2004, 2008, 2012, 2016),
+             linetype = "dotted", alpha = 0.4)
+```
+
+Now compare that to Hyattsville Mennonite, whose sermons only start in 2022 -- but span the 2024 election and its aftermath.
+
+### Task 15: Election mentions over time at Hyattsville Mennonite
+
+**Task** Run the following code. How does the Mennonite vocabulary differ from Paint Branch UUC's? Are specific candidate names used? What does that tell you about how the two traditions approach politics from the pulpit? **Answer** The biggest difference between the UUC and the Hyattsville Mennonite Church is that the Mennonite church has way less mentions of any of the words listed, with very few lines and dots on the graph. Specific names of elected officials, like Trump, are barely mentioned in the Mennonite church sermons. I think this tells us that the UUC is a more politically active in their teachings, whereas the Mennonite church seems to shy away from any mention of politics. This can probably be proven by the word "political" having a spike in 2025, which could possibly signify the phrase "not to be political" or another iteration of that phrase. 
+
+```{r}
+hm_track <- c("election", "vote", "president", "political", "politics",
+              "trump", "biden", "harris", "democracy")
+
+unique_words |>
+  filter(church == "Hyattsville Mennonite",
+         !is.na(date),
+         word %in% hm_track) |>
+  mutate(year = year(date)) |>
+  count(year, word) |>
+  ggplot(aes(x = year, y = n, color = word)) +
+  geom_line(linewidth = 1) +
+  geom_point() +
+  labs(title = "Election-related words in Hyattsville Mennonite sermons, 2022-2026",
+       x = "Year", y = "Mentions",
+       color = "Word")
+```
+
+### Task 16: Election-adjacent bigrams per church
+
+Single-word counts show frequency but not framing. A church that says "faithful citizen" and one that says "corrupt politician" both score a hit for "political" in Task 13 -- but they're saying very different things. Bigrams give us framing.
+
+**Task** Run the following code. For each church, pick the two or three bigrams you find most journalistically interesting and explain what they suggest about the church's stance. **Answer** 
+
+For Cheverly Baptist Church, I think the most interesting bigram to me is "identity politics", which could be an interesting story about how identity politics has played a role in church sermons. Another bigram that I found interesting is political party, which I think given the denomination could suggest they are saying something along the lines of not mentioning your political party or saying regardless of your political party. 
+
+For the Hyattsville Mennonite Church, I think the two bigrams I found the most interesting is land politics and geographical political. I think these two phrases could suggest that the church focuses on outside of the US political issues in its teachings. I think it would be interesting to see how the Mennonite Church defines land politics and how exactly that fits into their teachings. 
+
+For the Kettering Baptist Church, I think the most interesting bigram is vice president. I think this could suggest that they may follow the politics of Harris at the time, or found respect for her. I think it could suggest some sort of support for her. 
+
+For the UUC, the first bigram that I found the most interesting was voting rights. I think this aligns with the assumptions about the UUC teachings, in which they are more of a leftist denomination so they most likely suport voting rights, and have teachings based on the issues surrounding voting rights. Another bigram that I found interesting and would definitely require more research is uua president. I am not too sure what the UUA president is, but it is among the most mentioned so it has some importance to the sermons of the UUC. I would be interested to understand how this plays into their teachings. 
+
+```{r}
+election_stems <- c("vote", "voting", "voter", "voters", "election", "elections",
+                    "president", "presidential", "political", "politics",
+                    "democracy", "democratic", "candidate", "campaign",
+                    "trump", "biden", "harris", "obama")
+
+sermons |>
+  unnest_tokens(bigram, full_text, token = "ngrams", n = 2) |>
+  separate(bigram, c("word1", "word2"), sep = " ") |>
+  filter(!is.na(word1), !is.na(word2)) |>
+  filter(word1 %in% election_stems | word2 %in% election_stems) |>
+  filter(!word1 %in% stop_words$word, !word2 %in% stop_words$word) |>
+  mutate(bigram = paste(word1, word2, sep = " ")) |>
+  count(church, bigram, sort = TRUE) |>
+  group_by(church) |>
+  slice_max(n, n = 10) |>
+  ungroup()
+```
+
+## Immigration from the pulpit
+
+Elections aren't the only politically charged topic preachers grapple with. Immigration -- asylum, deportation, sanctuary, ICE enforcement -- has become a defining issue for many congregations, and some religious traditions have long-standing theological frameworks around "welcoming the stranger." Let's see whether (and how) that shows up in these sermons.
+
+### Task 17: Immigration vocabulary density + a word-sense trap
+
+We'll start with the same density approach we used for elections. But immigration vocabulary has a problem elections didn't: **ambiguous words**. "Ice" might mean Immigration and Customs Enforcement -- or it might mean the frozen stuff on a January sidewalk. "Sanctuary" might mean a sanctuary church offering shelter to migrants -- or the sanctuary of the building where the congregation meets. Raw counts can't tell you which.
+
+**Task** Run both code chunks below. In your answer, identify at least one church where the ranking in the first chunk is probably *misleading*, and use the bigrams in the second chunk to explain why. **Answer** Looking at the results of the first chunk, I think the UUC ranking can be the most misleading. When looking at the bigram, they only mention the word sanctuary and nothing else, which does not necessarily mean they are discussing immigration at a greater rate than other churches. 
+
+```{r}
+immigration_words <- c(
+  "immigrant", "immigrants", "immigration",
+  "migrant", "migrants", "migration",
+  "refugee", "refugees", "asylum",
+  "border", "borders",
+  "deport", "deported", "deportation",
+  "undocumented", "daca", "dreamer", "dreamers",
+  "ice", "sanctuary",
+  "stranger", "strangers", "foreigner", "foreigners",
+  "hospitality", "welcoming", "xenophobia"
+)
+
+unique_words |>
+  filter(word %in% immigration_words) |>
+  count(church, name = "immigration_mentions") |>
+  left_join(church_totals, by = "church") |>
+  mutate(per_10k_words = round(immigration_mentions / total_words * 10000, 1)) |>
+  arrange(desc(per_10k_words))
+```
+
+Now let's investigate the two ambiguous words. We'll pull every bigram containing "ice" or "sanctuary" and see what's actually being said:
+
+```{r}
+sermons |>
+  unnest_tokens(bigram, full_text, token = "ngrams", n = 2) |>
+  separate(bigram, c("word1", "word2"), sep = " ") |>
+  filter(word1 %in% c("ice", "sanctuary") | word2 %in% c("ice", "sanctuary")) |>
+  filter(!is.na(word1), !is.na(word2)) |>
+  mutate(bigram = paste(word1, word2, sep = " ")) |>
+  count(church, bigram, sort = TRUE) |>
+  group_by(church) |>
+  slice_max(n, n = 6) |>
+  ungroup()
+```
+
+### Task 18: ICE and immigration at Hyattsville Mennonite over time
+
+Hyattsville Mennonite is a historic peace church with an active immigrant-rights ministry. Their sermons from 2022 onward capture the run-up to -- and aftermath of -- the 2024 election and the immigration enforcement surge that followed. Let's see whether the data reflects that.
+
+**Task** Run the following code. Describe what happens to the word "ice" between 2024 and 2025, and how it compares to other immigration vocabulary in the same period. What does that suggest about what the congregation is responding to? **Answer** Between 2024 and 2025, the word ice sees a large spike in how many times it is mentioned. This could suggest the Mennonite church is responding to the several threats of deploying ICE agents in surrounding areas due to an executive order by President Trump. However, this could also suggest that they are more comfortable talking about immigration when it is a focus point of the entire country at the moment. 
+
+```{r}
+hm_immigration <- c("immigrant", "immigrants", "immigration",
+                    "migrant", "migrants", "asylum",
+                    "border", "deportation", "deport", "deported",
+                    "ice", "sanctuary", "hospitality",
+                    "stranger", "strangers", "welcoming", "refugee", "refugees")
+
+unique_words |>
+  filter(church == "Hyattsville Mennonite",
+         !is.na(date),
+         word %in% hm_immigration) |>
+  mutate(year = year(date)) |>
+  count(year, word) |>
+  ggplot(aes(x = year, y = n, color = word)) +
+  geom_line(linewidth = 1) +
+  geom_point() +
+  labs(title = "Immigration vocabulary at Hyattsville Mennonite, 2022-2026",
+       x = "Year", y = "Mentions",
+       color = "Word")
+```
+
+## Sentiment Analysis
+
+Another popular use of text analysis is to measure the sentiment of a word -- whether it expresses a positive or negative idea -- and tidytext has built-in tools to make that possible. We bring in a dataframe of words (called a lexicon) along with their sentiments using `get_sentiments`. The most common lexicon is called "bing."
+
+### Task 19: Sentiment by church with the bing lexicon
+
+**Task** Run the following code. Look carefully at the top negative words. Do any of them seem wrong for this context? Religious language uses words like "sin," "repent," "suffer," and "cross" in ways that a generic lexicon can't distinguish from, say, a news article. List three words where you think bing gets the sentiment wrong in a sermon context, and explain why. **Answer** I do not think any of the words listed have the sentiment wrong. However, I do think that the word like could be put into a stop word list just since that is a common word used to string along sentences in speech. 
+
+```{r}
+bing <- get_sentiments("bing")
+
+sermon_sentiment <- unique_words |>
+  inner_join(bing, by = "word") |>
+  count(church, word, sentiment, sort = TRUE)
+
+sermon_sentiment |>
+  filter(sentiment == "negative") |>
+  group_by(church) |>
+  slice_max(n, n = 10) |>
+  ungroup()
+
+sermon_sentiment |>
+  filter(sentiment == "positive") |>
+  group_by(church) |>
+  slice_max(n, n = 10) |>
+  ungroup()
+```
+
+### Task 20: Emotion categories with the NRC lexicon
+
+**Task** Run the following code. The NRC lexicon categorizes words into eight emotions (anger, anticipation, disgust, fear, joy, sadness, surprise, trust) rather than just positive/negative. Which emotions dominate each church's sermons? Does that match what you'd expect from each tradition? **Answer** For Cheverly Baptist church and Kettering Baptist church, the emotion that dominates the sermons is trust, which does make sense since the Baptist denomination are heavily involved in the direct teachings of the Bible. For the Hyattsville Mennonite Church and UUC, the emotion that dominates their sermons is also trust. I think that trust being the word that dominates all of the church's sermons mainly because religion is a big trust excercise, in which many people have to believe in the words spoken in sermon and trust an entity they cannot see. 
+
+```{r}
+# you may need to accept a license prompt the first time: install.packages("textdata")
+nrc <- get_sentiments("nrc")
+
+unique_words |>
+  inner_join(nrc, by = "word", relationship = "many-to-many") |>
+  filter(!sentiment %in% c("positive", "negative")) |>
+  count(church, sentiment) |>
+  group_by(church) |>
+  mutate(percent = n / sum(n) * 100) |>
+  ggplot(aes(x = sentiment, y = percent, fill = church)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(title = "Emotional vocabulary by church",
+       x = NULL, y = "% of emotion-coded words")
+```
+
+Gauging the sentiment of a word is heavily dependent on context, and as with other types of text analysis, sometimes larger patterns are more meaningful than individual results. But the potential with text analysis is vast: knowing what words and phrases public figures employ -- pastors, politicians, CEOs -- is a way to evaluate their actions and priorities. Those words and phrases are data.
+
+## Reflection
+
+### Task 21: Story ideas
+
+**Task** Based on everything you did above, describe two story ideas a local reporter could pursue using this kind of sermon analysis. For each, say what additional data or reporting would be needed to turn the word counts into an actual story. **Answer**
+
+One story idea that I have is to compare and contrast how political each Baptist church is. Addtional reporting I would need for this is to look at the websites of each church to understand their basic values and beliefs, then I would focus on specific policy issues for each church to see the amount of times, if at all, the words correlated to the issue are mentioned. 
+
+Another story idea that I have would be to see which policy issues are the most prevelant for each denomination. This can be done in the same manner as the immigration words that we found in task 17, in which we create a set of words that correlate with a specific issue and see the amount of times it is mentioned for each church sermon. This could give us a good idea of how politically involved, if at all, these churches are. More reporting that can be done for this is to talk to the pastors of each church to see how they approach their sermons. I think this could be a very important story to understand a church's values and beliefs. 
+
