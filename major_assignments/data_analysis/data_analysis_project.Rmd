@@ -25,9 +25,15 @@ clergy_contribs_2024 <- read_csv("data/clergy_contribs_2024.csv")
 ```
 
 ```{r}
-clergy_contribs_combined <- bind_rows(list(clergy_contribs_2018, clergy_contribs_2020, clergy_contribs_2022, clergy_contribs_2024))
+clergy_contribs_combined <- bind_rows(list(clergy_contribs_2018, clergy_contribs_2020, clergy_contribs_2022, clergy_contribs_2024)) |>
+  mutate(contributor_first_name = str_to_upper(contributor_first_name), contributor_last_name = str_to_upper(contributor_last_name), contributor_name = str_to_upper(contributor_name), contributor_city = str_to_upper(contributor_city), 
+         zip5 = str_sub(contributor_zip, start=1L, end=5L)) 
+       
+
 View(clergy_contribs_combined)
 ```
+
+
 
 ```{r}
 clergy_totals <- clergy_contribs_combined |>
