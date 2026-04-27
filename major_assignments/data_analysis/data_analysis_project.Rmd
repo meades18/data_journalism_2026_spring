@@ -13,7 +13,9 @@ This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute
 library(tidyverse)
 library(janitor)
 library(lubridate)
+library(tidycensus)
 ```
+
 --> question: payments <- Do the top clergy donors also give to Maryland state campaigns? 
 
 ##getting the data 
@@ -82,3 +84,43 @@ cycle_counts |>
 
 So far, I think I found some baseline results needed to answer my question of wo the top donors are and whether they contribute to Maryland campaigns. I have calculated the total amount contributed by a two year transaction period for the entire data frame. The results of this show that John Price has donated contributed twice among the top contributors, and Doris Cowan as the top contributor. After I found these top donors within the clergy contribution data, I used the Maryland campaign contribution website to search for the names listed under the top 10 clergy contributors, and six of the ten contributors were listed once or multiple times. I think my next step is to get a hold of the campaign data to further confirm that these clergy contributors have donated to Maryland campaigns. One thing that I think will be an issue is the timeframes of my data frames, whereas I have information for clergy contributions for 2018, 2020, 2022 and 2024, so I will need these years for campaign contribution data. 
 
+
+
+question 2 --> Which cities in Maryland have the highest clergy contributions? 
+
+```{r}
+top_cities <- clergy_contribs_combined |> 
+  group_by(contributor_city, contributor_name, contribution_receipt_amount) |>
+  summarise(total_amount = sum(contribution_receipt_amount, na.rm = TRUE)) |>
+  arrange(desc(total_amount))
+top_cities
+```
+```{r}
+md_cities_pop <- get_acs(
+  geography = "place",
+  variables = c(population = "B01001_001"),
+              year = 2021,
+              state = "MD",
+              geometry = TRUE)
+```
+```{r}
+md_cities_pop <- md_cities_pop |>
+  mutate(NAME = str_to_title(str_remove_all(NAME, ", Maryland"))) |> 
+  mutate(NAME = str_to_upper(NAME)) |> 
+  mutate(NAME = str_remove_all(NAME, "CDP"))
+```
+** my idea here was to get the geography for Maryland cities from the tidycensus, then join that to the clergy contributions data to create a map of the places that had the highest to lowest contributions. The intended goal was ultimately to create a map like we did in lab 10; however, the census data for cities is a little tricky. For example, I first removed the CDP and ,Maryland from the cities and upper cased all of the city names. Still, I do not think I would be able to join this dataframe to the contributions dataframe correctly, but I will put my attempt below. 
+
+```{r}
+md_city_contribs <- md_cities_pop |>
+  left_join(clergy_contribs_combined, join_by(NAME == `contributor_city`))
+```
+
+
+
+
+## loading in campaign data: 
+```{r}
+md_campaign <- read_csv("https://github.com/dwillis/datajournalismbook-religion/raw/refs/heads/main/data/md_contribs.csv.zip")
+```
+Honestly, I do not know what I am doing wrong but I cannot load this data in. If I were to load the data, I would do the same process that I did for the contributions data, which is grouping by the contributor name, then summarizing to find the total amount contributed by each person. However, I think this method would give me the results for all of the Maryland campaign contributors, and in my case I am trying to see if the top clergy contributors also donate to Maryland campaigns. In this case, I think the best step would be to filter the Maryland campaign contributions by each name that is listed as the top clergy contributors, and see whether they are in the Maryland campaign data. Then, I could possibly join the dataframes, with only the top clergy members, and create a line chart showing the contributions over time(?). 
