@@ -1,0 +1,191 @@
+---
+title: "pre_lab_12.Rmd"
+author: "Madison Eades"
+date: "2026-04-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Scraping data with Rvest
+
+Sometimes, organizations put data online on a page or in a searchable database. And when you ask them for a copy of the data underneath the website, they say no.
+
+Why? Because they have a website. That's it. That's their reason. They say they don't have to give you the data because they've already given you the data, never mind that they haven't given it to you in a form you can actually load into R with ease.
+
+Lucky for us, there's a way for us to write code to get data even when an organization hasn't made it easy: webscraping.
+
+One of the most powerful tools you can learn as a data journalist is how to scrape data from the web. Scraping is the process of programming a computer to act like a human that opens a web browser, goes to a website, ingests the HTML from that website into R and turns it into data.
+
+The degree of difficulty here goes from "Easy" to "So Hard You Want To Throw Your Laptop Out A Window." And the curve between the two can be steep. You can learn how to scrape "Easy" in a day. The hard ones take a little more time, but it's often well worth the effort because it lets you get stories you couldn't get without it.
+
+In this chapter, we'll work through a real-world example that's a step above the simplest case: scraping the 2026 pastoral appointments from the Baltimore-Washington Conference of the United Methodist Church.
+
+We're going to use a library called `rvest`, which you can install it the same way we've done all installs: go to the console and `install.packages("rvest")`. We'll also use `httr`, which handles the actual HTTP request. Install it with `install.packages("httr")`.
+
+Like so many R package names, rvest is a bad pun. You're supposed to read it to sound like "harvest", as in "harvesting" information from a website the same way you'd harvest crops in a field. Ha-ha.
+
+### Task 1: Load libraries and settings
+
+**Task** Run the following code in the gray-colored codeblock below to load the libraries we'll use
+
+```{r}
+#| output: false
+library(tidyverse)
+library(rvest)
+library(httr)
+library(lubridate)
+```
+
+For this example, we're going to scrape a list of 2026 pastoral appointments posted by the Baltimore-Washington Conference of the United Methodist Church. 
+
+```{r, echo=FALSE}
+knitr::include_graphics(rep("images/rvest1.png"))
+```
+
+The page organizes appointments by date, with each date in an `<h6>` heading followed by a `<ul>` list of individual appointments.
+
+The URL is: <https://www.bwcumc.org/news/2026-appointments/>
+
+### Task 2: Fetch the HTML with GET
+
+Unlike the simplest scraping case — where you can pass a URL directly to `read_html()` — some websites require a bit more care. This site uses SSL configuration that can cause problems with R's default settings, so we use `httr::GET()` to fetch the page manually before parsing it.
+
+**Task** Run the following code in the gray-colored codeblock below to fetch the HTML
+
+```{r}
+r <- GET("https://www.bwcumc.org/news/2026-appointments/",
+         config(ssl_verifypeer = FALSE, http_version = 1))
+
+# display the response status
+r
+```
+
+The `ssl_verifypeer = FALSE` option tells R not to verify the site's SSL certificate — useful when you encounter certificate errors on otherwise trustworthy sites. The `http_version = 1` argument forces HTTP/1.1 instead of HTTP/2, which also helps with compatibility on certain servers.
+
+A status code of 200 means success.
+
+### Task 3: Parse the raw HTML
+
+Now we take the raw response body and turn it into an HTML document that rvest can navigate.
+
+**Task** Run the following code in the gray-colored codeblock below to parse the HTML
+
+```{r}
+html <- read_html(content(r, "text"))
+
+# display the structure
+html
+```
+
+`content(r, "text")` extracts the response body as a character string, and `read_html()` parses it into an HTML tree that rvest understands.
+
+### Task 4: Find the content div
+
+Real websites wrap their content in `<div>` tags with specific IDs or classes. If you right-click on the appointment text and choose "Inspect", you'll see the appointments live inside a `<div id="text">`. We can target that directly using a CSS ID selector:
+
+```{r, echo=FALSE}
+knitr::include_graphics(rep("images/rvest2.png"))
+```
+
+**Task** Run the following code in the gray-colored codeblock below to isolate the content div
+
+```{r}
+text_div <- html |> html_element("#text")
+
+# display the result
+text_div
+```
+
+`html_element()` returns the *first* matching element. The `#text` selector is CSS for "the element whose id is 'text'". Now we're working only with the part of the page that contains appointments — everything else is ignored.
+
+### Task 5: Get the child nodes
+
+Inside that div, the content alternates between `<h6>` date headings and `<ul>` lists of appointments. To process them in order, we grab all direct children:
+
+**Task** Run the following code in the gray-colored codeblock below to get the child nodes
+
+```{r}
+nodes <- text_div |> html_children()
+
+# how many nodes are there?
+length(nodes)
+```
+
+`html_children()` returns the immediate children of an element. Each node will be either an `<h6>` (a date) or a `<ul>` (a list of appointments for that date).
+
+### Task 6: Walk through the nodes to extract appointments
+
+Now comes the core logic. We loop through each node, check its tag name, and either update our current date tracker or extract the appointment rows beneath it.
+
+**Task** Run the following code in the gray-colored codeblock below to extract the appointments
+
+```{r}
+appointments <- list()
+current_date <- NA
+
+# loop over each node
+for (node in nodes) {
+  tag <- html_name(node)
+  
+  # if h6, then it's a date
+  if (tag == "h6") {
+    current_date <- paste(html_text(node, trim = TRUE),", 2026")
+  # if ul, it's a list of appointments
+  } else if (tag == "ul") {
+    items <- node |> html_elements("li")
+    for (item in items) {
+      name <- item |> html_element("strong") |> html_text(trim = TRUE)
+      full_text <- html_text(item, trim = TRUE)
+      appointments <- append(appointments, list(data.frame(
+        date = mdy(current_date),
+        name = name,
+        text = full_text,
+        stringsAsFactors = FALSE
+      )))
+    }
+  }
+}
+```
+
+A few things to notice here:
+
+- `html_name()` returns the tag name of a node as a string (`"h6"`, `"ul"`, etc.)
+- We use `current_date` to carry the most recent date forward as we move through the list, and lubridate's `mdy` function to parse it into an actual date
+- Each `<li>` contains a `<strong>` tag with the pastor's name, plus surrounding text with the appointment details
+- `html_element("strong")` finds the first `<strong>` inside the `<li>`; `html_text()` extracts its text content
+- We build up a list of single-row data frames, one per appointment
+
+### Task 7: Combine into a dataframe
+
+**Task** Run the following code in the gray-colored codeblock below to bind the list into a single dataframe
+
+```{r}
+df <- bind_rows(appointments)
+
+# how many appointments did we get?
+cat(sprintf("Extracted %d appointments\n", nrow(df)))
+
+# show the first few rows
+head(df)
+```
+
+`bind_rows()` stacks a list of dataframes into one. Each row represents a single pastoral appointment with three columns: the announcement date, the pastor's name, and the full text of the appointment.
+
+### Task 8: Save the data and explore it
+
+**Task** Run the following code in the gray-colored codeblock below to save the data as a CSV and do some basic exploration
+
+```{r}
+write_csv(df, "bwc_appointments_2026.csv")
+
+# how many appointments per date?
+df |>
+  count(date, sort = TRUE)
+```
+
+Now you have a clean, structured dataset from a page that offered no download button. From here you could analyze which data have the most appointments, search for specific pastors, or track which congregations are receiving new leadership.
+
+What patterns do you notice in this data? What stories might it suggest? **Answer** One pattern that I notice is that there seems to be a trend in appointments for January and April, both reporting higher numbers of appointments in comparison to February and March. 
