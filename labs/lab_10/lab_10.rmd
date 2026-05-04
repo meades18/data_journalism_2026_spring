@@ -54,15 +54,16 @@ md_county_population <- get_acs(geography = "county",
 ```
 ```{r}
 md_county_population <- md_county_population |>
+  rename(county = NAME) |> 
   mutate(county = str_to_title(str_remove_all(county,", Maryland"))) |>
   mutate(county = str_trim(county,side="both")) |>
-  select(county, population, geometry)
+  select(county, estimate, geometry)
 
 
 md_pop_with_religion <- md_county_population |>
   left_join(md_religion, join_by(county == `County Name`)) |>
-  mutate(congregations_rate = Congregations/population*10000,
-         adherents_rate = Adherents/population*10000) 
+  mutate(congregations_rate = Congregations/estimate*10000,
+         adherents_rate = Adherents/estimate*10000) 
 
 md_pop_with_religion
 ```
