@@ -49,23 +49,6 @@ arrange(desc(total_amount))
 
 clergy_totals 
 ```
-## Cycle counts 
-
-```{r}
-cycle_counts <- clergy_contribs_combined |>
-  group_by(contributor_name) |>
-  summarize(cycles_contributed = n_distinct(two_year_transaction_period))
-```
-
-
-## Those who contributed more than three times 
-```{r}
-cycle_counts |> 
-  filter(cycles_contributed > 3) |> 
-  arrange(desc(cycles_contributed)) |>
-  head(10)
-```
-
 
 ## Searching for the top donors in the md_campaign database 
 ```{r}
@@ -74,15 +57,30 @@ d_cowan <- md_campaign |>
          
 j_price <- md_campaign |> 
   filter(contributor_first_name == "JOHN", contributor_last_name == "PRICE")
+
+a_fraser <- md_campaign |> 
+  filter(contributor_first_name == "ALEXA", contributor_last_name == "FRASER")
+
+d_sword <- md_campaign |> 
+  filter(contributor_first_name == "DAVID", contributor_last_name == "SWORD")
+
+l_mann <- md_campaign |> 
+  filter(contributor_first_name == "LUCRETIA", contributor_last_name == "MANN")
+
+e_spearman <- md_campaign |> 
+  filter(contributor_first_name == "ELDRIDGE", contributor_last_name == "SPEARMAN")
+
 ```
-
-
 
 
 ## Explanation #1 
 So far, I think I found some baseline results needed to answer my question of wo the top donors are and whether they contribute to Maryland campaigns. I have calculated the total amount contributed by a two year transaction period for the entire data frame. The results of this show that John Price has donated contributed twice among the top contributors, and Doris Cowan as the top contributor. After I found these top donors within the clergy contribution data, I used the Maryland campaign contribution website to search for the names listed under the top 10 clergy contributors, and six of the ten contributors were listed once or multiple times. I think my next step is to get a hold of the campaign data to further confirm that these clergy contributors have donated to Maryland campaigns. One thing that I think will be an issue is the timeframes of my data frames, whereas I have information for clergy contributions for 2018, 2020, 2022 and 2024, so I will need these years for campaign contribution data. 
 
+Of the top ten clergy members, the majority of them appear in the Maryland campaigns data frame. Many of the clergy that have contributed to Maryland campaigns have only contributed one time compared to the several contributions made in the clergy data frame. One of the most significant donors in this data is from Doris Cowan, who contributed over 6,000 times in the clergy database, and 25 times in the Maryland campaign data. According to a document from the General Commissioners From Presbytery of Baltimore in 2020, Cowan is honorably retired. Looking at all of the contributions made in the clergy contributions data and the Maryland campaign data, Cowan has contributed money to democratic organizations and campaigns. In comparison to Doris Cowan, the other contributors have only contributed once or twice, such as Alexa Fraser, who contributed twice this year. I think Doris Cowan is an obvious outlier in the data of Maryland campaign contributions. Since they are a retired clergy member, this could indicate that they have signed up for recurring payments unknowingly, or they are just more politically active following retirement. 
 
+Another thing that I find interesting is that majority of these clergy members have donated to Maryland campaigns, even if it was only once. I find this interesting because we often assume those within the church environment do not affiliate themselves with politics of any sort. Another interesting factor is that these members have only contributed to campaigns within the last few years, 2024-2026, which could possibly suggest that these clergy members are becoming more politically active as the nation becomes increasingly politically polarized. 
+
+For my next steps, I would like to create a line chart of contributions over time, joining the clergy contributions data and the Maryland campaign data, to see the top donors contributions over time. However, this may not work out since only one of the clergy contributors shows up more than once in the Maryland campaign data. Therefore, it may be better to do a bar chart comparing the total amounts each top clergy member has contributed. 
 
 
 
@@ -128,8 +126,8 @@ md_cities_pop <- md_cities_pop |>
 ##Combining the top cities dataframe with the md_cities_pop dataframe. 
 
 ```{r}
-md_city_contribs <- top_cities |>
-  inner_join(md_cities_pop, join_by(contributor_city == NAME)) |> 
+md_city_contribs <- md_cities_pop |>
+  inner_join(top_cities, join_by(NAME == contributor_city)) |> 
   mutate(contribs_rate = total_amount/estimate*10000) |> 
   arrange(desc(total_amount))
 
@@ -148,14 +146,15 @@ ggplot() +
   scale_fill_viridis_b(option="magma",trans = "log")
 ```
 
+Obviously, this is not a map of Maryland like I wanted to have, so there is something I am missing when I am joining the dataframes. I've looked through lab 10 and am still not sure how to get a Maryland layer. 
 
-
-## Explanation 2 
+## Explanation 2 - data analysis 3 
 Honestly, I do not know what I am doing wrong but I cannot load this data in. If I were to load the data, I would do the same process that I did for the contributions data, which is grouping by the contributor name, then summarizing to find the total amount contributed by each person. However, I think this method would give me the results for all of the Maryland campaign contributors, and in my case I am trying to see if the top clergy contributors also donate to Maryland campaigns. In this case, I think the best step would be to filter the Maryland campaign contributions by each name that is listed as the top clergy contributors, and see whether they are in the Maryland campaign data. Then, I could possibly join the dataframes, with only the top clergy members, and create a line chart showing the contributions over time(?). 
 
 
 
 
+note to self: 
 
 look for weird things! also compare the top clergy members, then filter by name in the campaign data and see if the top clergy are in that database then look into whether they are active or inactive, then look at some outliers, then what patterns do you see amongst these people what do they have in common or what separates them -- think about these as individual donors as having habits are hte hbaits theirs or are they unique.
 
