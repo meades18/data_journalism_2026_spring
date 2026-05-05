@@ -1,0 +1,234 @@
+---
+title: "Pre-Lab 13: Using LLMs with Religion Data"
+author: "Madison Eades"
+date: "2026-01-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Large language models (LLMs) like Claude are not just chatbots — they are tools journalists can use to extract, classify and summarize information from documents that are too messy or unstructured for ordinary data processing. In this pre-lab you will learn how to call LLMs directly from R using the `ellmer` package, which provides a clean interface to Anthropic's Claude and other providers.
+
+We will work through three uses that are directly relevant to religion data journalism:
+
+1. **Basic chat** — asking an LLM a question and getting a plain-text response
+2. **Structured extraction from text** — pulling specific facts out of a research article into a tidy dataframe
+3. **Structured extraction from a PDF** — sending a PDF directly to an LLM and extracting structured claims
+
+Along the way you will practice a critical skill: verifying LLM output against its source. LLMs can extract the wrong number from a table with complete confidence. A journalist's job is to check.
+
+## Setup
+
+First, install `ellmer` if you have not already. Run this in your console, not in a code chunk:
+
+```
+install.packages("ellmer")
+```
+
+```{r}
+library(ellmer)
+library(tidyverse)
+```
+
+### API Key
+
+To call Claude, you need an Anthropic API key. Store it as an environment variable so it never appears in your code or gets accidentally committed to GitHub. Run this line **in your console** and then restart R:
+
+```
+Sys.setenv(ANTHROPIC_API_KEY = "your-key-here")
+```
+
+Once set, `ellmer` will find it automatically whenever you call `chat_anthropic()`. You can verify it is available with:
+
+```{r}
+# Should print TRUE if your key is set — never print the key itself
+nchar(Sys.getenv("ANTHROPIC_API_KEY")) > 0
+```
+
+## Part 1: Basic Chat
+
+The central object in `ellmer` is a **Chat**. You create one with a provider function like `chat_anthropic()`, optionally giving it a system prompt that shapes how it behaves. Then you call `$chat()` to send a message and get a response.
+
+```{r}
+chat <- chat_anthropic(
+  system_prompt = "You are a helpful assistant with expertise in U.S. religion data and sociology of religion."
+)
+```
+
+Let's ask it something relevant to what we've been studying:
+
+```{r}
+chat$chat("What is Simpson's Diversity Index and how is it used to measure religious diversity at the county level?")
+```
+
+Notice that the response streamed to your console as it arrived. You can also capture it silently as a string by setting `echo = "none"`:
+
+```{r}
+chat2 <- chat_anthropic(echo = "none")
+response <- chat2$chat("In one sentence, name the three most common Christian denominations in the United States.")
+cat(response)
+```
+
+Each `Chat` object holds its full conversation history. That means you can ask follow-up questions and the model remembers what was said. But it also means each turn adds to your token usage. For data extraction tasks - where you just want a structured result, not a dialogue - it is better to create a fresh chat for each task.
+
+Let's see the token cost of our first conversation so far:
+
+```{r}
+chat$get_cost()
+```
+
+## Part 2: Structured Extraction from Text
+
+`$chat()` returns free text, which is hard to work with programmatically. The `$extract_data()` method is different: you define the exact structure you want using `type_object()`, `type_array()`, `type_string()`, and friends, and the model returns JSON that `ellmer` automatically converts into R objects.
+
+We will work with the chapter "Religious Diversity in the United States" by Dale E. Jones from the 2020 U.S. Religion Census, which is available as a plain text file in our course data repository.
+
+```{r}
+jones_text <- read_lines(
+  "https://raw.githubusercontent.com/dwillis/religion-data/refs/heads/main/ReligiousDiversity-Jones1.txt"
+)
+
+# How long is the document?
+length(jones_text)
+```
+
+```{r}
+# Collapse into a single string for the prompt
+jones_full <- paste(jones_text, collapse = "\n")
+```
+
+Now let's extract Table 1 from the chapter — the most and least diverse major metropolitan areas — as a structured dataframe.
+
+```{r}
+chat3 <- chat_anthropic()
+
+metro_data <- chat3$chat_structured(
+  jones_full,
+  type = type_array(
+    items = type_object(
+      .description = "One metropolitan area entry from Table 1.",
+      metro_area = type_string("Full name of the metropolitan area as it appears in the table"),
+      rank       = type_integer("The rank number (1 through 5 for most diverse, 52 through 56 for least diverse)"),
+      tier       = type_enum(c("most diverse", "least diverse"), "Whether this metro is among the most or least religiously diverse")
+    )
+  )
+)
+
+metro_data
+```
+
+`ellmer` automatically converted the array of objects into a dataframe.
+
+### Verify the extraction
+
+This is the most important step. Open the original text file and find Table 1. Does every row in `metro_data` match what is actually written there? Check: Are any metros missing? Are any ranks wrong? Did the model hallucinate a city that is not in the table?
+
+**ANSWER HERE** No, there are no metro areas that are missing from the list that Claude provided. Similarly, the ranks provided by Claude are accurate to the original text. 
+
+## Part 3: Structured Extraction from a PDF
+
+One of the most powerful uses of LLMs in journalism is extracting tables from PDFs — annual reports, government documents, academic papers — that are not available as clean CSVs. Claude can read PDF content directly when you use `content_pdf_url()`.
+
+We will extract Table 6 from the Dollhopf chapter: the ten states with the largest increase in adherents as a percentage of population between 2010 and 2020. The table has four data columns: adherents as a percent of population in 2010, adherents as a percent of population in 2020, and the net difference.
+
+```{r}
+chat4 <- chat_anthropic()
+
+pdf_url <- "https://raw.githubusercontent.com/dwillis/religion-data/refs/heads/main/Trends2010to2020-Dollhopf.pdf"
+
+table6_data <- chat4$chat_structured(
+  content_pdf_url(pdf_url),
+  type = type_array(
+    type_object(
+      .description = "One row from Table 6: States with the Largest Increase in Adherents as a % of Population, 2010-2020.",
+      rank           = type_integer("The rank number, 1 through 10"),
+      state          = type_string("The name of the state"),
+      pct_2010       = type_number("Adherents as a percentage of population in 2010 (e.g. 39.13 for 39.13%)"),
+      pct_2020       = type_number("Adherents as a percentage of population in 2020 (e.g. 47.08 for 47.08%)"),
+      net_difference = type_number("Net difference in percentage points between 2010 and 2020 (e.g. 7.95 for 7.95%)")
+    )
+  )
+)
+
+table6_data
+```
+
+```{r}
+# Should be 10 — one row per state in the table
+nrow(table6_data)
+```
+
+```{r}
+# Sort by net difference to confirm rank order
+table6_data |> arrange(desc(net_difference))
+```
+
+```{r}
+# Compute pct_2020 - pct_2010 ourselves and check against net_difference
+table6_data |>
+  mutate(computed_diff = pct_2020 - pct_2010) |>
+  select(rank, state, net_difference, computed_diff)
+```
+
+### Verify the extraction
+
+The `computed_diff` column above should match `net_difference` for each state. But the percentages themselves came from the PDF — and LLMs can mis-read numbers in tables.
+
+Open the PDF and find Table 6. Does each state's `pct_2010`, `pct_2020`, and `net_difference` match exactly what is printed in the table?
+
+**ANSWER HERE** For the most part, the pct_2010, pct_2020 and 'net_difference' match exactly what is printed in the table. For example, the values for New Mexico are different from each other by .01. 
+
+## Part 4: The Limits of LLM Extraction
+
+The examples above show LLMs working well. But there are predictable failure modes every journalist should know.
+
+**Hallucination of numbers.** LLMs are trained to produce plausible text. When a table is complex or a number appears ambiguous, the model may substitute a plausible-sounding value. Always cross-reference numeric claims against the source.
+
+**Context collapse.** A finding that is true of one denomination may be attributed to another when the model processes a long document with many similar-sounding facts.
+
+**Incomplete extraction.** `extract_data()` with a long document may miss some rows of a table, especially if the table is split across pages in the PDF.
+
+**Prompt sensitivity.** Small wording changes in your `type_object()` descriptions can produce meaningfully different results. If your extraction looks wrong, try rephrasing the field descriptions before assuming the data is bad.
+
+Let's test prompt sensitivity by re-running the Table 6 extraction without telling the model which table to use. Instead of naming Table 6 specifically, we'll ask for states and percentage data in general terms:
+
+```{r}
+chat5 <- chat_anthropic()
+
+table6_vague <- chat5$chat_structured(
+  content_pdf_url(pdf_url),
+  type = type_array(
+    type_object(
+      .description = "A row about a state and its religious adherent percentages.",
+      rank           = type_integer("A rank number"),
+      state          = type_string("A state name"),
+      pct_2010       = type_number("A percentage from 2010"),
+      pct_2020       = type_number("A percentage from 2020"),
+      net_difference = type_number("The change between the two percentages")
+    )
+  )
+)
+
+table6_vague
+```
+
+Now compare the two extractions:
+
+```{r}
+# Did we get the same number of rows?
+nrow(table6_data)
+nrow(table6_vague)
+```
+
+```{r}
+# Are the states and values the same?
+table6_data |> arrange(rank) |> select(rank, state, net_difference)
+table6_vague |> arrange(rank) |> select(rank, state, net_difference)
+```
+
+Do the two extractions return the same states and values? If they differ, which rows changed and what does that tell you about how specific your type descriptions need to be? 
+
+No, the two extractions did not return the same states and values. It seems that Claude picked up information from a different table within the PDF. This tells me that the type descriptions need to be as specific as possible so that we can get the most accurate results. 
