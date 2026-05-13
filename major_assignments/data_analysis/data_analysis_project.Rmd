@@ -1,5 +1,5 @@
 ---
-title: "data_analysis_project"
+title: "Clergy Contributions Data Analysis"
 name: "Madison Eades"
 output: html_notebook
 ---
@@ -23,10 +23,13 @@ library(sf)
 
 
 
-
---> question 1: <- Do the top clergy donors also give to Maryland state campaigns? 
+--> Question 1: <- Do the top clergy donors also give to Maryland state campaigns? 
 
 ##getting the data 
+
+The clergy contributions data for 2018-2024 was loaded, along with the Maryland campaign contribution data. 
+
+
 ```{r}
 clergy_contribs_2018 <- read_csv("data/clergy_contribs_2018.csv")
 clergy_contribs_2020 <- read_csv("data/clergy_contribs_2020.csv")
@@ -37,7 +40,9 @@ md_campaign <- read_csv("~/Downloads/md_contribs.csv.zip")
 
 
 
-# Cleaning up the clergy contributions data and combining all of the dataframes into one. This code block also includes cleaning up the data. 
+# Cleaning up the clergy contributions data 
+
+The clergy contributions data was combined using bind_rows into one dataframe called clergy_contribs_combined. The data was then cleaned, using str_to_upper for majority of the columns within the dataframe and str_sub which created a cutoff of five digits for the zipcodes. 
 
 ```{r}
 clergy_contribs_combined <- bind_rows(list(clergy_contribs_2018, clergy_contribs_2020, clergy_contribs_2022, clergy_contribs_2024)) |>
@@ -48,7 +53,7 @@ clergy_contribs_combined <- bind_rows(list(clergy_contribs_2018, clergy_contribs
 View(clergy_contribs_combined)
 ```
 
-
+In the following code block, I created a new dataframe called clergy_totals, which totaled up the amount of clergy contributions and the number of contributions for each individual within the dataframe. Then, I arranged the data by the total amount so I could find who the top contributors are. The top clergy members that donated to federal campaigns were Doris Cowan with 46760.02	donated, John Price, Michael Freeman, Eldridge Spearman, Rev. Dr. Frank Trotter, Alexa Fraser, Lynette Entzian, Lucretia Mann and David Sword. 
 
 ```{r}
 clergy_totals <- clergy_contribs_combined |>
@@ -63,6 +68,9 @@ clergy_totals
 ```
 
 ## Searching for the top donors in the md_campaign database 
+
+To answer my question, it was important to find the top contributors listed in the clergy_totals dataframe in the Maryland campaign contributions dataframe. To do this, I created dataframes for some of the top contributors, filtering the md_camaign dataframe for their first and last name. This allowed me to see which top contributors also contributed to Maryland campaigns, if at all, and by how much. The majority of the clergy members that contributed federally also contributed to Maryland campaigns; however, there was a clear outlier in the results: Doris Cowan. 
+
 ```{r}
 d_cowan_state <- md_campaign |> 
   filter(contributor_first_name == "DORIS", contributor_last_name == "COWAN") 
@@ -85,16 +93,17 @@ e_spearman <- md_campaign |>
 ```
 
 
-## Explanation #1 
-So far, I think I found some baseline results needed to answer my question of wo the top donors are and whether they contribute to Maryland campaigns. I have calculated the total amount contributed by a two year transaction period for the entire data frame. The results of this show that John Price has donated contributed twice among the top contributors, and Doris Cowan as the top contributor. After I found these top donors within the clergy contribution data, I used the Maryland campaign contribution website to search for the names listed under the top 10 clergy contributors, and six of the ten contributors were listed once or multiple times. I think my next step is to get a hold of the campaign data to further confirm that these clergy contributors have donated to Maryland campaigns. One thing that I think will be an issue is the timeframes of my data frames, whereas I have information for clergy contributions for 2018, 2020, 2022 and 2024, so I will need these years for campaign contribution data. 
+## Explanation from data analysis submission 2 
+
 Of the top ten clergy members, the majority of them appear in the Maryland campaigns data frame. Many of the clergy that have contributed to Maryland campaigns have only contributed one time compared to the several contributions made in the clergy data frame. One of the most significant donors in this data is from Doris Cowan, who contributed over 6,000 times in the clergy database, and 25 times in the Maryland campaign data. According to a document from the General Commissioners From Presbytery of Baltimore in 2020, Cowan is honorably retired. Looking at all of the contributions made in the clergy contributions data and the Maryland campaign data, Cowan has contributed money to democratic organizations and campaigns. In comparison to Doris Cowan, the other contributors have only contributed once or twice, such as Alexa Fraser, who contributed twice this year. I think Doris Cowan is an obvious outlier in the data of Maryland campaign contributions. Since they are a retired clergy member, this could indicate that they have signed up for recurring payments unknowingly, or they are just more politically active following retirement. 
 
-Another thing that I find interesting is that majority of these clergy members have donated to Maryland campaigns, even if it was only once. I find this interesting because we often assume those within the church environment do not affiliate themselves with politics of any sort. Another interesting factor is that these members have only contributed to campaigns within the last few years, 2024-2026, which could possibly suggest that these clergy members are becoming more politically active as the nation becomes increasingly politically polarized. 
+An interesting factor is that some of these members have only contributed to campaigns within the last few years, 2024-2026, which could possibly suggest that these clergy members are becoming more politically active as the nation becomes increasingly politically polarized. 
 
+Since Cowan is the only clergy member that seems to be highly active within the md_campaign dataframe and the clergy contributions dataframe, I decided to focus on them for my data exploration. I am specifically interested in comparing the total amount of contributions given between the federal and state level.  
 
 # Creating Cowan dataframes for state and federal contributions + making a bar chart 
 
- 
+In the following code section, I cleaned the d_cowan_state dataframe by creating a new column that included the first and last name of the contributor, then renamed the transaction amount and transaction date to match what the columns are in the md_campaign dataframe. Both of these steps are in order for me to later join the federal and state contributions made by Doris Cowan. 
 
 ```{r}
 
@@ -103,6 +112,19 @@ d_cowan_state <- d_cowan_state |>
   rename(contribution_receipt_amount = transaction_amount,
          contribution_receipt_date = transaction_date)
 ```
+
+# Creating the federal contributions dataframe for Cowan + combining the Cowan dataframes
+
+In the following code block, several steps are taken to answer my question. First, I created a cowan_federal contributions dataframe using the clergy contributions data. To do this, I simply filtered for their name then selected the most important columns I would need for my data exploration. In this case, the columns I chose were the contributor name and contribution receipt amount. Then, I created another dataframe called cowan_comparisons, which binded the d_cowan_state dataframe and the cowan_federal dataframe, while also totaling the amount contributed to each using the contribution receipt amount column. On the federal level, Cowan has contributed 246, while on the state level they have contributed $50,852.57. After I looked over my results from the cowan_comparison dataframe, I decided it would be best to create a bar chart displaying the obvious  difference in the values.
+
+For the bar chart, I asked ChatGPT two different things: 
+
+When I included the title for my graph, it went off of the page, so I asked ChatGPT if there was a way to adust the size of the title. "Using R and ggplot, I created a bar chart, which includes labs like a title; however, my title is cut off. Is there a way using this library to decrease the font size of my title so it fits in the graph?" 
+
+Then, I felt the graph would be more comprehensible if I added the values of each bar. 
+
+"Using R and ggplot, I have created a bar chart that shows two values being compared to each other. At the moment, the bar chart does not make much sense without the specific values shown on the graph. Is there a way to include labels for the values and put them inside the bars?" 
+
 
 ```{r}
 cowan_federal <- clergy_contribs_combined |> 
@@ -121,6 +143,9 @@ cowan_comparison <- bind_rows(
 cowan_comparison |>
   ggplot(aes(x = source, y = total_amount)) +
   geom_col(fill = "lightpink") +
+  geom_text(aes(label = total_amount),
+            hjust = 1.1,
+            color = "black") +
   coord_flip() +
   scale_y_log10() +
   theme_fivethirtyeight() +
@@ -137,15 +162,15 @@ cowan_comparison |>
 
 
 
-
-
-Next, I want to look at party affiliations based on the committee that the clergy member contributed to. Using a database from Joe Wicke, each committee is assigned either a D or R.  
+Next, I want to look at party affiliations based on the committee that the clergy member contributed to. Using a database from Joe Wicke, each committee is assigned either a D or R. In this dataframe, there are 255 rows and 3 columns. 
 
 #Loading in data that has the committee party affiliations 
 ```{r}
 committee_parties <- read_csv("data/committee_parties_clean.csv")
 ```
+# Combining the clergy contributions data with the committee parties data 
 
+In this code section, I created a new dataframe combining the clergy contributions data to the committee party data to know which party affiliation each contribution was made out to. Then, I totaled up the dollar amount of contributions made to each party. For democratic committees, 859882.7	has been contributed, and for republican committees 163814.4 has been contributed. 
 ```{r}
 clergy_contribs_combined_with_parties <- clergy_contribs_combined |> 
   inner_join(committee_parties, join_by(committee_name))
@@ -155,13 +180,27 @@ clergy_contribs_combined_with_parties |>
   summarize(total_amount = sum(contribution_receipt_amount, na.rm = TRUE)) |>
   arrange(desc(total_amount))
 
-
 ```
 Since Maryland is a democratic state, the results for the total amounts contributed to democratic versus republican committees make sense. 
 
+#Doris Cowan Party Affiliation
+
+In the following code block, I created a new dataframe that filtered for Doris Cowan's name in the clergy contribution data with party affiliations to see exactly who they were contributing to and whether there was a clear party affiliation. The results for Cowan's party affiliation were very clear: every contribution made was given to a democratic committee. Then, I was interested to see if this pattern was the same for other top clergy contributors on the federal level, so I did the same process and filtered for different names. From the results of this step, I found a very interesting trend that further confirmed the code that found the total dollar amount contributed to each party: the clergy members who contributed to committees are majority democrat. 
+```{r}
+cowan_party_contribs <- clergy_contribs_combined_with_parties |> 
+  filter(contributor_name == "COWAN, DORIS") 
+
+price_party_contribs <- clergy_contribs_combined_with_parties |> 
+  filter(contributor_name == "PRICE, JOHN")
+
+fraser_party_contribs <- clergy_contribs_combined_with_parties |> 
+  filter(contributor_name == "FRASER, ALEXA")
+```
 
 
-question 2 --> Which cities in Maryland have the highest clergy contributions? 
+Question 2 --> Which cities in Maryland have the highest clergy contributions? Are they more urban, more affluent? 
+
+In this section of code, I created a dataframe looking at the top contributing cities within Maryland using the clergy combined contributions data. First, I grouped by contributor city, then summarized the total amount by contribution receipt amount then arranged the results by the total amount. Then I filtered the results to show those who have contributed over $1500. 
 
 ```{r}
 top_cities <- clergy_contribs_combined |> 
@@ -174,6 +213,8 @@ top_cities
 
 ```
 
+In order to join my database, I needed to clean up the top cities so that I could join them later with the Maryland census tract data in order to create a map. This included removing city from some of the names and anything else that was necessary. 
+
 ```{r}
 write_csv(top_cities, "top_cities.csv")
 
@@ -181,7 +222,9 @@ top_cities <- read_csv("top_cities.csv")
 ```
 
 
-Say that you used chat to get the columns right lmao 
+## Getting Maryland Census data - median income and population 
+
+For this section, I created a dataframe of Maryland cities using the get_acs function to grab census tract data for each city based on median income level and population. In order to ensure both estimate columns were present in this dataframe, I used pivot wider to create the separate columns. 
 
 ```{r}
 md_cities <- get_acs(
@@ -201,7 +244,9 @@ md_cities <- get_acs(
   )
 ```
 
+#Cleaning md_cities 
 
+In this section of code, I cleaned up the md_cities dataframe using str_remove_all to remove all of the ,Maryland from the end of each city, then str_to_upper to capitalize all of the city names, then str_remove_all again to remove various titles from the city names, such as "town," "city" and "village." This step allows me to seamlessly combine the top cities dataframe with the Maryland cities in order to make comparisons. 
 
 ```{r}
 md_cities <- md_cities |>
@@ -218,12 +263,13 @@ md_cities <- md_cities |>
 
 ##Combining the top cities dataframe with the md_cities_pop dataframe. 
 
+In the following section, I created a new dataframe which joined the md_cities dataframe to the top_cities dataframe, joining by the name of the city. For the next step, I wanted to find the contribution rate by population and by median income level - to do so, I used mutate and then arranged this data in descending order to see the top cities that contributed by their rates. 
 ```{r}
 md_city_contribs <- md_cities |>
   inner_join(top_cities, join_by(NAME == contributor_city)) |> 
   mutate(contribs_rate_pop = total_amount/population*10000,
          contribs_rate_income = total_amount/median_income*10000) |> 
-  arrange(desc(total_amount)) 
+  arrange(desc(contribs_rate_pop)) 
 
 top_cities |>
   anti_join(md_cities, join_by(contributor_city == NAME))
@@ -233,7 +279,8 @@ top_cities |>
 
 ##Making Map  
 
-For this section, I got the outline for Maryland counties, using the counties <- counties() to get all U.S. counties, then filtered for Maryland only counties in the following line. Then, I created a map using the weight as the total_amount from the md_city_contribs dataframe. This provided a map of the cities that have contributed the most to least within the state of Maryland. 
+In the following code block, I created a map to display my results from the above sections. First, I got the every county within the US, then filtered that dataframe to find only the Maryland counties. This would allow me to have a Maryland outline for my map. Then, I created the map using ggplot and geom_sf, using the md_counties data for the outline, then the md_city_contribs as the actual data to pull from, and filled the cities by the contribution rate by population. I did the same steps for the contributions by median income level as well for a comparison of the two. 
+
 ```{r}
 counties <- counties()
 
@@ -248,6 +295,7 @@ ggplot() +
   scale_fill_viridis_b(option="magma",trans = "log") + 
   labs(title = "Maryland Clergy Contributions by population")
 ```
+
 ```{r}
 counties <- counties()
 

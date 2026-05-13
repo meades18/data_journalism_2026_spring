@@ -1,0 +1,1195 @@
+---
+title: "Foreclosure Data Analysis"
+---
+
+# Maryland Foreclosure Analysis
+
+For the Data Analysis final project, we will be working with the [Maryland intent to intent to foreclose notice data by zip code](https://opendata.maryland.gov/Housing/Maryland-Notices-of-Intent-to-Foreclose-by-Zip-Cod/ftsr-vapt), provided by the Maryland Office of Financial Regulation, on the state's Open Data Portal.
+
+## Data Setup
+
+Load libraries.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+#install.packages("ggrepel")
+#install.packages('ggthemes')
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(ggthemes)
+library(tidycensus)
+library(ggplot2)
+library(ggrepel)
+library(tigris)
+library(sf)
+```
+
+The Maryland intent to foreclose notice data was loaded. There are **552 rows** and **29 columns** of data, which includes the zip codes in Maryland and the number of intent to foreclose notices per month, from July 2021 to October 2023.
+
+The data was then cleaned and a column was created to count the total number of intent to foreclose notices for the entire time frame for each zip code.
+
+```{r}
+foreclosure_md <- read_csv("foreclosure_dataset/Maryland_Notices_of_Intent_to_Foreclose_by_Zip_Code_20231117.csv", guess_max = 552) |>
+  clean_names() |>
+  mutate(total_intent_to_foreclose_notices = july_2021 + august_2021 + september_2021 + october_2021 + november_2021 + december_2021 + january_2022 + february_2022 + march_2022 + april_2022 + may_2022 + june_2022 + july_2022 + august_2022 + september_2022 + october_2022 + november_2022 + december_2022 + january_2023 + february_2023 + march_2023 + april_2023 + may_2023 + june_2023 + july_2023 + august_2023 + september_2023 + october_2023)
+```
+
+## Data Limitations
+
+We are interested in comparing this dataset to [the state's data on property values by county](https://opendata.maryland.gov/Business-and-Economy/Maryland-Real-Property-Counties-by-Land-Value/97jq-u9cw) to answer a question about the relationship between intent to foreclose notice rates and property values.
+
+To answer our question, we will eventually need to group properties by zip code and calculate the average property value by zip code. The original property assessment data set provided by the state is too large to push to GitHub, so instead, we are using a modified CSV (created by Derek Willis) that has the calculated means for each land use type and zip code, along with the number of properties.
+
+The property value assessment dataset also includes land use information. The CSV of mean assessed property values by zip code also includes a land use column, but it is unclear whether that column represents the most common zoning type in the zip code.
+
+In terms of the time period, with the data dating back from July 2021, we have intent to foreclose notice data for fiscal years 2021 (July 2021 - June 2022) and 2022 (July 2022 - June 2023). The data begins just after the end of Maryland's foreclosure moratorium in June 2021.
+
+```{r}
+summary(foreclosure_md)
+```
+
+There is no clear indication on Maryland's Open Data Portal as to whether every reported intent to foreclose notice is a residential property. We might assume so -- not least because it is listed under the "housing" category on the Open Data Portal -- but the tracker is managed by Maryland's Department of Finance. We may need to clarify that point before we can make any meaningful inferences using housing-related census metrics.
+
+However, [another page on the state's Department of Labor website](https://www.labor.maryland.gov/finance/consumers/frforeclosuredatatracker.shtml) describes the state's foreclosure data as only tracking residential foreclosures.
+
+While the intent to foreclose notice dataset apparently only includes residential intent to foreclose notices, those notices are not necessarily sent to the address of the residential building facing foreclosure. In at least some cases, the intent to foreclose notices are sent to P.O. boxes.
+
+## Data Exploration
+
+```{r}
+#The following is ChatGPT's suggestion re: how to create a new dataframe displaying the sum of each column except for zip and total.
+
+monthly_sum <- foreclosure_md |>
+  select(-zip, -total_intent_to_foreclose_notices) |>
+  summarise_all(sum)
+
+# Print the new data frame
+print(monthly_sum)
+```
+
+We used the following ChatGPT prompts to sort out how to flip the monthly_sum dataset and plot it in a bar graph:
+
+*I have a dataset called monthly_sum. It contains columns july_2021, august_2021, september_2021, october_2021, november_2021, december_2021, january_2022, february_2022, march_2022, april_2022, may_2022, june_2022, july_2022, august_2022, september_2022, october_2022, november_2022, december_2022, january_2023, february_2023, march_2023, april_2023, may_2023, june_2023, july_2023, august_2023, september_2023, and october_2023. It has a single row with numeric values. I want to create a bar graph that plots the value of each column on a bar graph. How would I do that in R using tidyverse?*
+
+*How do I do this using pivot_wider or pivot_longer?*
+
+*How would I reorder the values on the x-axis to appear in the order in which they appeared in the monthly_sum dataset?*
+
+The bar graph displays a trend we predicted: After the end of the pandemic-era moratorium on foreclosures, and as pandemic-era housing assistance funds ran dry, the number of monthly intent to foreclose notices surged.
+
+We now need to sort out *when* they surged.
+
+```{r}
+monthly_sum_long <- monthly_sum |>
+  pivot_longer(
+    cols = starts_with("july_2021"):starts_with("october_2023"),
+    names_to = "month",
+    values_to = "monthly_foreclosure_total"
+  ) |>
+  clean_names() |> 
+# use lubridate to parse out months, years
+  mutate(
+    month = my(month),
+# create month_parsed column with abbreviated month name.
+    month_parsed = month(month, label = TRUE),
+    year_parsed = year(month)
+  )
+
+# Create a bar graph
+monthly_sum_long |> 
+  ggplot() +
+  geom_bar(
+    aes(
+      # reorder from lowest to highest
+      x = reorder(month, monthly_foreclosure_total),
+      weight = monthly_foreclosure_total),
+    fill = "skyblue") +
+  labs(
+    x = "Month",
+    y = "Intent to Foreclose Notices",
+    title = "Monthly Foreclosure Notice Totals") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Here's the same chart ordered chronologically:
+
+```{r}
+monthly_sum_long <- monthly_sum_long |>
+  mutate(
+    # create a variable for ordering months chronologically
+    order_month = as.Date(month, format="%b %Y")
+  )
+
+# Create a bar graph
+monthly_foreclosure_totals_bar<- monthly_sum_long |> 
+  ggplot() +
+  geom_bar(
+    aes(
+      x = reorder(month, order_month),
+      y = monthly_foreclosure_total),
+    fill = "skyblue", stat = "identity") +
+  labs(
+    x = "Month",
+    y = "Intent to Foreclose Notices",
+    title = "Monthly Foreclosure Notice Totals, July 2021-October 2023") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+monthly_foreclosure_totals_bar
+```
+
+## Joining Other Datasets
+
+Most of our analysis will rely on Census data (if we are correct in that this data is about residential foreclosure notices), so we should begin loading and joining that data here.
+
+```{r}
+#Load ACS5 variables
+acs5 <- load_variables(2021, "acs5", cache = TRUE)
+
+acs5
+```
+
+We use an inner join to filter out zip codes that do not have corresponding population estimates in the 2019 ACS data on the population of Maryland zip codes. The inner join filters out 89 zip codes. Some of those zip codes are in other states, including in Virginia and Delaware. Before we move forward with genuine analysis, we need to sort out where those zip codes are/whether they exist. We also use this step to add the geometry field for each zip code.
+
+```{r}
+#Grab population by md zip
+md_zip_pop <- get_acs(geography = "zcta",
+              variables = c(zip_pop = "B01003_001"),
+              state = "MD",
+              year = 2019,
+              geometry = TRUE)
+
+#Join notice of intent to foreclose dataset with pop by md zip dataset
+md_foreclosure_with_zip_pop <- inner_join(foreclosure_md, md_zip_pop, by=c("zip" = "GEOID")) |>
+#Rename variable
+  rename(zip_pop = estimate) |>
+#Clean up
+  select(-NAME, -variable) |> 
+#Add notices per capita column
+  mutate(foreclosure_pc = (total_intent_to_foreclose_notices/zip_pop)*1000)
+
+#Create a dataframe of non-Maryland zip codes with recorded intent to foreclose notices.
+non_md_zip_foreclosure <- anti_join(foreclosure_md, md_zip_pop, by=c("zip" = "GEOID")) |>
+  group_by(zip)
+```
+
+```{r}
+non_md_zip_foreclosure
+```
+
+After cross-referencing with CensusReporter, we can identify the following zip codes from the list of 89 that did not match Maryland zip codes recorded in the 2019 ACS population count:
+
+40 of the zip codes filtered out by the inner join are either international zip codes or errors.
+
+Delaware: 19964 (Total intent to foreclose notices: 1) 19973 (Total intent to foreclose notices: 1)
+
+DC: Unique: 20230 - Covers the Ellipse and the Department of Commerce building. (Total intent to foreclose notices: 1)
+
+Virginia: 23692 (Total intent to foreclose notices: 1)
+
+We also find 31 zip codes associated with Maryland PO boxes. Some PO box zip codes remain in the dataset after the inner join. We do not know why some, but not all, PO box zip codes appear in the 2019 ACS population estimate data, nor do we know why the ACS records populations in zip codes that exist only to identify PO boxes. 21528, for instance, is the zip code for PO boxes in Frostburg; the Maryland Department of Finance recorded 48 intent to foreclose notices sent to that zip code.
+
+The following Maryland zip codes appear in the Maryland intent to foreclose notice dataset but not in the Maryland zip code population dataset pulled from the 2019 ACS.
+
+Standard zip codes (populated):
+
+-   20656 - St. Mary's County. (Total intent to foreclose notices: 11)
+
+-   20889 - Montgomery County (Total intent to foreclose notices: 0)
+
+-   21233 - Baltimore City. (Total intent to foreclose notices: 0)
+
+-   21287 - Baltimore City. (Total intent to foreclose notices: 0)
+
+-   21411 - Anne Arundel County.(Total intent to foreclose notices: 0)
+
+Unique zip codes (government buildings, etc.):
+
+-   20771 - Prince George's County.
+
+-   20857 - Montgomery County.
+
+-   20889 - Montgomery County.
+
+-   20892 - Montgomery County.
+
+-   20894 - Montgomery County.
+
+-   21235 - Baltimore City.
+
+-   21241 - Baltimore City.
+
+-   21412 - Anne Arundel County (Naval Academy).
+
+We will drop all zip codes with a population below 20 (not including the MOE). This is an arbitrary threshold, but it allows us to filter out zip codes with populations of 0 and those where a single intent to foreclose notice would produce an outsize impact on per capita calculations.
+
+```{r}
+#Dataframe for zip codes with <20 population
+
+md_20_pop_zips <- md_foreclosure_with_zip_pop |>
+  filter(zip_pop <= 20)
+
+md_20_pop_zips
+
+```
+
+Two of the zip codes with 0 population have intent to foreclose notice records.
+
+-   21105: One intent to foreclose notice. This is a PO box zip code in northern Baltimore County.
+
+-   21627: Two intent to foreclose notices. This is a zip code in Dorchester County that, according to CensusReporter, has a population of 26. According to the 2019 ACS, it does not have any residents. It is adjacent to the zip code with the highest foreclosure rate per capita in the state.
+
+```{r}
+#Dataframe for zip codes with population > 20. 
+md_foreclosure_with_zip_pop <- md_foreclosure_with_zip_pop |>
+  filter(zip_pop >= 20)
+```
+
+We will also need to include other census data in our dataset -- namely household income.
+
+The earliest point of reference available for median household income at the zip code level is 2011. We can get earlier data for counties, but because some zip codes cross county lines, it would be difficult to group our zip-code level foreclosure data into counties.
+
+```{r}
+md_medhouseholdincome_2011_zip <- get_acs(geography = "zcta", state="MD",
+              variables = c(medhouseholdincome_2011 = "B19013_001"),
+              year = 2011)
+```
+
+The zip code column in the 2011 household income dataset appends the number 24 -- the numeric ID for Maryland -- to every zip code. We need to remove those digits to match zip codes with those in our intent to foreclose notice dataset. For simplicity's sake, we modify the "NAME" column and use it later in place of the GEOID column.
+
+```{r}
+md_medhouseholdincome_2011_zip$NAME <- str_replace(md_medhouseholdincome_2011_zip$NAME, "ZCTA5 ", "")
+```
+
+Given that economic conditions in a zip code may have fluctuated substantially over ten years, we also need midpoints in the decade between 2011 and 2021 for comparison.
+
+We will use 2014 and 2017 as those midpoints.
+
+```{r}
+md_medhouseholdincome_2014_zip <- get_acs(geography = "zcta",
+              variables = c(medhouseholdincome_2014 = "B19013_001"),
+              year = 2014)
+```
+
+```{r}
+md_medhouseholdincome_2017_zip <- get_acs(geography = "zcta",
+              variables = c(medhouseholdincome_2017 = "B19013_001"),
+              year = 2017)
+```
+
+The last point of reference available for median household income at the zip code level is 2021.
+
+```{r}
+md_medhouseholdincome_2021_zip <- get_acs(geography = "zcta",
+              variables = c(medhouseholdincome_2021 = "B19013_001"),
+              year = 2021)
+```
+
+We will also use ACS data on homeownership and mortgage status.
+
+The following ACS code represents "total housing units."
+
+```{r}
+md_total_housing <- get_acs(geography = "zcta",
+              variables = c(total_housing = "B25001_001"),
+              state = "MD",
+              year = 2019)
+```
+
+The following ACS code represents "owner-occupied" housing units.
+
+```{r}
+md_owner_housing <- get_acs(geography = "zcta",
+              variables = c(total_housing = "B25003_002"),
+              state = "MD",
+              year = 2019)
+```
+
+The following ACS code represents "housing units with a mortgage, contract to purchase, or similar debt."
+
+```{r}
+md_debt_housing <- get_acs(geography = "zcta",
+              variables = c(debt_housing = "B25081_002"),
+              state = "MD",
+              year = 2019)
+```
+
+Finally, we will use ACS data on median age.
+
+The following ACS code represents median age. The latest data available on median age on the zip code level is from 2019.
+
+```{r}
+md_medage <- get_acs(geography = "zcta",
+              variables = c(medage = "B01002_001"),
+              state = "MD",
+              year = 2019)
+```
+
+Now we join it all together:
+
+```{r}
+md_foreclosure_with_zip_pop_and_housing <- left_join(md_foreclosure_with_zip_pop, md_total_housing, by=c("zip" = "GEOID")) |>
+  rename(total_housing_units = estimate)
+```
+
+```{r}
+md_foreclosure_with_zip_pop_and_housing <- left_join(md_foreclosure_with_zip_pop_and_housing, md_owner_housing, by=c("zip" = "GEOID")) |>
+  rename(total_owner_units = estimate)
+```
+
+```{r}
+md_foreclosure_with_zip_pop_and_housing <- left_join(md_foreclosure_with_zip_pop_and_housing, md_debt_housing, by=c("zip" = "GEOID")) |> rename(total_debt_units = estimate)
+```
+
+We remove unnecessary columns:
+
+```{r}
+md_foreclosure_with_zip_pop_and_housing <- md_foreclosure_with_zip_pop_and_housing |>
+  select(-NAME.x, -variable.x, -NAME.y, -variable.y, - NAME, -variable)
+```
+
+We write a CSV:
+
+```{r}
+write_csv(md_foreclosure_with_zip_pop_and_housing, "foreclosure_dataset/maryland_foreclosure_and_census_data.csv")
+```
+
+### DataWrapper and Zip Codes
+
+Here is a preliminary Datawrapper map: <https://datawrapper.dwcdn.net/CSSKx/2/>
+
+## Questions
+
+### Question 1
+
+Which zip code in Maryland has the most intent to foreclose notices per capita? How do the demographics of that zip code compare to the state averages?
+
+The zip code in Maryland with the most intent to foreclose notices per capita is 21626, which is in Crapo, Dorchester County. Crapo has more than double the number of intent to foreclose notices per capita in the second and third highest zip codes and more than 10 times the state average of foreclosure notices per 1000 people. Note: The state average rate of intent to foreclosure notices per capita is 21.65.
+
+```{r}
+md_foreclosure_with_zip_pop |> 
+  group_by(zip) |> 
+  summarize(foreclosure_pc) |> 
+  arrange(desc(foreclosure_pc))
+```
+
+```{r}
+#Calculate the statewide mean for intent to foreclose notices per capita
+md_foreclosure_pc_mean = mean(md_foreclosure_with_zip_pop$foreclosure_pc)
+
+md_foreclosure_pc_mean
+```
+
+Here is the map of the intent to foreclose notices per capita for each zip code.
+
+```{r}
+#Create map of intent to foreclose notices per capita for each zip code.
+ggplot() +
+   geom_sf(data=md_foreclosure_with_zip_pop, aes(geometry= geometry, fill=foreclosure_pc)) +
+   scale_fill_gradientn(
+     colors = c("lightgreen","darkorange", "#A84268"),
+     )+
+   theme_minimal()
+```
+
+We can also make a map of zip codes in which the number of intent to foreclose notices issued per capita in each zip code was larger than the statewide mean number of intent to foreclose notices issued per capita.
+
+```{r}
+#Add column to md_foreclosure_with_zip_pop to calculate difference between zip code-level number of notices per capita and the statewide mean.
+
+md_foreclosure_with_zip_pop <- md_foreclosure_with_zip_pop |>
+  mutate(dif_from_state_mean = foreclosure_pc - md_foreclosure_pc_mean)
+```
+
+```{r}
+#Filter out the negative values in the difference from state average column
+md_foreclosure_with_zip_pop <- md_foreclosure_with_zip_pop |> 
+  filter(dif_from_state_mean>=0)
+```
+
+We will need a .csv version of that modified dataset for DataWrapper.
+
+```{r}
+#write_csv(md_foreclosure_with_zip_pop,"md_foreclosure_for_map.csv")
+```
+
+
+For this map, we use the logarithmic scale to isolate zip codes in which the difference between the number of intent to foreclose notices per capita and the state mean was greater than 0.
+
+```{r}
+#Create map of zip codes in which the number of intent to foreclose notices per capita was higher than the statewide mean number of notices per capita.
+
+md_notice_dif_state_mean_log_plot <- md_foreclosure_with_zip_pop |> 
+ggplot() +
+   geom_sf(data=md_foreclosure_with_zip_pop, aes(geometry= geometry, fill=dif_from_state_mean)) +
+   scale_fill_gradientn(colors = c("lightgreen","darkorange", "#A84268"),trans = "log")+
+   theme_minimal()
+
+md_notice_dif_state_mean_log_plot
+```
+
+We created a bar chart of the top 5 zip codes with the highest number of intent to foreclose notices for the next question. In order to do this we filter out zip codes with intent to foreclose notices lower than 90 per capita.
+
+```{r}
+top_md_foreclosure_with_zip_pop <- md_foreclosure_with_zip_pop |> 
+  group_by(zip) |> 
+  summarize(foreclosure_pc) |>
+  filter(foreclosure_pc>=90) |> 
+  arrange(desc(foreclosure_pc)) 
+```
+
+```{r}
+top_md_foreclosure_with_zip_pop |> 
+  ggplot() +
+  geom_bar(aes(x=reorder(zip, foreclosure_pc), weight=foreclosure_pc), fill = "#A84268") +
+  labs(
+    x = "Zip Codes",
+    y = "Foreclosure Notices Per Capita",
+    title = "Southern Maryland has Highest Foreclosure Notices Per Capita"
+  )
+  
+```
+
+### Question 2
+
+We opted to rework this question to get a better sense of intent to foreclose notice timelines for zip codes with high numbers of intent to foreclose notices per capita.
+
+Based on the five top zip codes with the highest intent to foreclose notices per capita, what is the trend of foreclosures per capita per month since July 2021 to October 2023 for each zip code?
+
+Here is the list of the top five zip codes with the highest number of intent to foreclose notices per capita and where these zip codes are located in.
+
+1.  21626 - Crapo, Dorchester County
+
+2.  21641 - Hillsboro, Caroline County
+
+3.  20618 - primary city is Bushwood, St. Mary's County
+
+4.  21675 - Wingate, Dorchester County
+
+5.  20695 - primary city is Whiteplains, Charles County
+
+When we initially created the following bar charts, the arrangement of the months in the x-axis were months in annual increments such as April-'22, April'23, May'22, May'23. To get the x-axis to follow the month order chronologically we asked ChatGPT this question: *how do I make the months in the x axis follow chronologically in the bar chart?* and it suggested to specify the month order in the code.
+
+After converting the month column to a date data type in the Data Exploration section, the following charts already list foreclosure notices in chronological order.
+
+1.  Bar graph of monthly intent to foreclose notices in 21626 - Crapo, Dorchester County. This largely white bayshore community has a median age of 54 and a mean household income roughly equivalent to that of the Cambridge micropolitan area (3/5 of the statewide mean household income).
+
+```{r}
+#Create Crapo dataset for bar graph
+crapo_monthly_foreclosure_pc <- md_foreclosure_with_zip_pop |> 
+  filter(zip == 21626) |> 
+  select(-zip) |> 
+  pivot_longer(
+    cols = starts_with("july_2021"):starts_with("october_2023"),
+    names_to = "month",
+    values_to = "monthly_foreclosure"
+  ) |> 
+  select(month, monthly_foreclosure) 
+  # Specify the order of months - this will be used elsewhere. 
+month_order <- c("july_2021", "august_2021", "september_2021", "october_2021", 
+                 "november_2021", "december_2021", "january_2022", "february_2022", 
+                 "march_2022", "april_2022", "may_2022", "june_2022", 
+                 "july_2022", "august_2022", "september_2022", "october_2022", 
+                 "november_2022", "december_2022", "january_2023", "february_2023", 
+                 "march_2023", "april_2023", "may_2023", "june_2023", 
+                 "july_2023", "august_2023", "september_2023", "october_2023")
+
+# Convert month column to factor with specified order
+crapo_monthly_foreclosure_pc$month <- factor(crapo_monthly_foreclosure_pc$month, 
+                                             levels = month_order)
+
+# Plotting the graph with months in chronological order
+crapo_monthly_foreclosure_chart <- ggplot(crapo_monthly_foreclosure_pc, aes(x = month, y = monthly_foreclosure)) +
+  geom_bar(stat = "identity", fill = "#A84268") +
+  labs(x = "Month", y = "Intent to Foreclose Notices", title = "Monthly Intent to Foreclose Notices: Crapo, MD") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+crapo_monthly_foreclosure_chart
+```
+
+2.  Bar graph of monthly intent to foreclose notices in 21641 - Hillsboro, Caroline County. This almost entirely white community west of Denton has a median age of 44.9 and a median household income roughly equivalent to that of Caroline County (2/3 of the statewide median household income).
+
+```{r}
+#Create Hillsboro dataset for bar graph
+hillsboro_monthly_foreclosure_pc <- md_foreclosure_with_zip_pop |> 
+  filter(zip == 21641) |> 
+  select(-zip) |> 
+  pivot_longer(
+    cols = starts_with("july_2021"):starts_with("october_2023"),
+    names_to = "month",
+    values_to = "monthly_foreclosure"
+  ) |> 
+  select(month, monthly_foreclosure)
+
+#Convert the month column to factor with specified order
+hillsboro_monthly_foreclosure_pc$month <- factor(hillsboro_monthly_foreclosure_pc$month, 
+                                             levels = month_order)
+
+#Plot the graph with months in chronological order
+ggplot(hillsboro_monthly_foreclosure_pc, aes(x = month, y = monthly_foreclosure)) +
+  geom_bar(stat = "identity", fill = "#FF5E1B") +
+  labs(x = "Month", y = "Intent to Foreclose Notices", title = "Monthly Intent to Foreclose Notices: Hillsboro, MD") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+3.  Bar graph of monthly intent to foreclose notices in 20618 - Bushwood, St. Mary's County. This community is roughly 51 percent Black and 47 percent white and has a median age of 63. The zip code's median household income is roughly half that of the California-Lexington Park metropolitan area (3/5 of the statewide median household income).
+
+```{r}
+#Create Bushwood dataset for bar graph
+bushwood_monthly_foreclosure_pc <- md_foreclosure_with_zip_pop |> 
+  filter(zip == 20618) |> 
+  select(-zip) |> 
+  pivot_longer(
+    cols = starts_with("july_2021"):starts_with("october_2023"),
+    names_to = "month",
+    values_to = "monthly_foreclosure"
+  ) |> 
+  select(month, monthly_foreclosure)
+
+#Convert the month column to factor with specified order
+bushwood_monthly_foreclosure_pc$month <- factor(bushwood_monthly_foreclosure_pc$month, 
+                                             levels = month_order)
+
+#Plot the graph with months in chronological order
+ggplot(bushwood_monthly_foreclosure_pc, aes(x = month, y = monthly_foreclosure)) +
+  geom_bar(stat = "identity", fill = "#FF5E1B") +
+  labs(x = "Month", y = "Intent to Foreclose Notices", title = "Monthly Intent to Foreclose Notices: Bushwood, MD") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+4.  Bar graph of monthly intent to foreclose notices in 21675 - Wingate, Dorchester County. This small bayshore community is, like its southern neighbor (Crapo), almost entirely white. The median age of zip code residents is just under 68. The zip code's median household income is roughly 3/4 that of the Cambridge, MD micropolitan area (1/2 of the statewide median household income).
+
+```{r}
+#Create Wingate dataset for bar graph
+wingate_monthly_foreclosure_pc <- md_foreclosure_with_zip_pop |> 
+  filter(zip == 21675) |> 
+  select(-zip) |> 
+  pivot_longer(
+    cols = starts_with("july_2021"):starts_with("october_2023"),
+    names_to = "month",
+    values_to = "monthly_foreclosure"
+  ) |> 
+  select(month, monthly_foreclosure)
+
+#Convert the month column to factor with specified order
+wingate_monthly_foreclosure_pc$month <- factor(wingate_monthly_foreclosure_pc$month, 
+                                             levels = month_order)
+
+#Plot the graph with months in chronological order
+  ggplot(wingate_monthly_foreclosure_pc, aes(x = month, y = monthly_foreclosure)) +
+  geom_bar(stat = "identity", fill = "#FF5E1B") +
+  labs(x = "Month", y = "Intent to Foreclose Notices", title = "Monthly Intent to Foreclose Notices: Wingate, MD") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+5.  Bar graph of monthly intent to foreclose notices in 20695 - Whiteplains, Charles County. This majority-Black community south of Waldorf has a median age of 41.2 and a median household income higher than that of the broader DMV metropolitan area (1.3 times the statewide median household income).
+
+```{r}
+#Create Whiteplains dataset for bar graph
+whiteplains_monthly_foreclosure_pc <- md_foreclosure_with_zip_pop |> 
+  filter(zip == 20695) |> 
+  select(-zip) |> 
+  pivot_longer(
+    cols = starts_with("july_2021"):starts_with("october_2023"),
+    names_to = "month",
+    values_to = "monthly_foreclosure"
+  ) |> 
+  select(month, monthly_foreclosure)
+
+#Convert the month column to factor with specified order
+whiteplains_monthly_foreclosure_pc$month <- factor(whiteplains_monthly_foreclosure_pc$month, 
+                                             levels = month_order)
+
+#Plot the graph with months in chronological order
+whiteplains_monthly_foreclosure_chart <- ggplot(whiteplains_monthly_foreclosure_pc, aes(x = month, y = monthly_foreclosure)) +
+  geom_bar(stat = "identity", fill = "#FF5E1B") +
+  labs(x = "Month", y = "Intent to Foreclose Notices", title = "Monthly Intent to Foreclose Notices: Whiteplains, MD") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+whiteplains_monthly_foreclosure_chart
+```
+
+From these calculations and graphs, we see that residents in Crapo started receiving intent to foreclose notices in August 2022 (counting only post-moratorium intent to foreclose notices), with the highest number of intent to foreclose notices issued in May 2023. According to <https://www.unitedstateszipcodes.org/21626/>, there are only 120 people and 122 housing units in Crapo, hence the high number of intent to foreclose notices per capita. We should bear in mind that, according to reporting by the Baltimore Sun in 2020 <https://www.baltimoresun.com/2020/08/19/marylands-dorchester-county-is-washing-away-leaving-its-residents-with-hard-choices/>, Dorchester County is at the epicenter of Maryland's coastal flooding challenges. The area saw serious flooding in 2021, and insurance providers may have increased premiums for homeowners in coastal Dorchester County. Can we tie the intent to foreclose notices in Dorchester County to flooding?
+
+We should also keep an eye on zip code 20695 in Whiteplains, Charles County. With a population of 6,794 and 2,574 housing units, the gradual increase in intent to foreclose notices issued since July 2021 to October 2023 more closely tracks the statewide trend. Is Whiteplains the right place to look to understand why Charles County (and, to a lesser extent, PG County) saw higher numbers of intent to foreclose notices per capita after the end of Maryland's foreclosure moratorium than other major metro counties?
+
+### Question 3
+
+Which months have the most intent to foreclose notices, and do those patterns repeat annually?
+
+From assessing our data's entire timeframe, October has the highest amount of intent to foreclose notices, with 14,215 notices from July 2021 to October 2023. It seems like intent to foreclose notices tend to be handed out over the summer and fall, as other months high on the list include September, August and July. The months that have the least amount of intent to foreclose notices are winter months. November has the lowest, with 7,967 notices.
+
+```{r}
+monthly_sum_long|> 
+# group by parsed month
+  group_by(month_parsed) |>
+# sum up foreclosure totals by months over the years
+  summarize(
+    total_intent_to_foreclose_notices = sum(monthly_foreclosure_total)
+  ) |> 
+# arrange from highest to lowest
+  arrange(desc(total_intent_to_foreclose_notices))
+```
+
+After summing up foreclosure totals for the entire timeframe, we now need to break it down by year. We are deciding to assess it by fiscal year, as our timeframe begins at the start of the 2021 fiscal year.
+
+To help us filter the dataframe, we asked ChatGPT:
+
+*I have a dataframe of monthly data from July 2021 to October 2023. How can I filter the dataframe to only have data from the 2021 fiscal year (July 2021-July2022) in R using tidyverse?*
+
+Over the course of the 2021 fiscal year, the prevalence of intent to foreclose notices grew in waves. Intent to foreclose notices peaked in April 2022, with over 5,000 notices. Other high points include October 2021, January 2021, and June 2022. During this fiscal year, more notices tended to appear almost quarterly.
+
+```{r}
+# for fiscal year 2021
+monthly_sum_long_fy21 <- monthly_sum_long |> 
+  filter(month >= "2021-07-01" & month <= "2022-06-01")
+
+# create bar graph
+ggplot(monthly_sum_long_fy21, aes(x = month, y = monthly_foreclosure_total)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Month", y = "Total Foreclosure Notices", title = "Monthly Foreclosure Notice Totals in FY 2021") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Over the 2022 fiscal year, the rate of intent to foreclose notices did not change that much each month. It largely stayed in the range of 4,000 to 6,000 notices. There was a peak in January 2023, with over 6,000 notices.
+
+```{r}
+# for fiscal year 2022
+monthly_sum_long_fy22 <- monthly_sum_long |> 
+  filter(month >= "2022-07-01" & month <= "2023-06-01")
+
+# create bar graph
+ggplot(monthly_sum_long_fy22, aes(x = month, y = monthly_foreclosure_total)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Month", y = "Total Foreclosure Notices", title = "Monthly Foreclosure Notice Totals in FY 2021") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+These bar graphs visualize that higher numbers of intent to foreclose notices tend to appear in seasonal waves -- and that this is more apparent in the winter/spring months. The conclusion from our first calculation, that assessed intent to foreclose notices by month for the entire data frame, may have been skewed from the inclusion of the July 2023-October 2023 numbers. Here's an assessment for just the 2021 and 2022 fiscal years:
+
+```{r}
+monthly_sum_long |> 
+# filter for only fy 21-22
+  filter(month >= "2021-07-01" & month <= "2023-06-01") |> 
+# group by parsed month
+  group_by(month_parsed) |>
+# sum up foreclosure totals by months over the years
+  summarize(
+    total_intent_to_foreclose_notices = sum(monthly_foreclosure_total)
+  ) |> 
+# arrange from highest to lowest
+  arrange(desc(total_intent_to_foreclose_notices))
+
+```
+
+For the 2021 and 2022 fiscal years, the months with the most intent to foreclose notices were January, April and May.
+
+### Question 4
+
+Do the zip codes with the lowest per capita income growth in the state from 2011-2021 match the zip codes with the highest number of foreclosures notices per capita?
+
+```{r}
+md_foreclosure_with_zip_pop_housing_income_2011 <- left_join(md_foreclosure_with_zip_pop_and_housing, md_medhouseholdincome_2011_zip, by=c("zip" = "NAME")) |> rename(med_householdincome_2011_zip = estimate)
+```
+
+```{r}
+md_foreclosure_with_zip_pop_housing_income <- left_join(md_foreclosure_with_zip_pop_housing_income_2011, md_medhouseholdincome_2021_zip, by=c("zip" = "GEOID")) |> rename(med_householdincome_2021_zip = estimate)
+```
+
+We remove the unnecessary columns:
+
+```{r}
+md_foreclosure_with_zip_pop_housing_income <- md_foreclosure_with_zip_pop_housing_income |>
+  select(-variable.x, -NAME, -variable.y)
+```
+
+We calculate the change in incomes from 2011 to 2021 in a new column:
+
+```{r}
+md_foreclosure_with_zip_pop_housing_income <- md_foreclosure_with_zip_pop_housing_income |>
+  mutate(income_change_2011_2021= ((med_householdincome_2021_zip - med_householdincome_2011_zip)/med_householdincome_2011_zip * 100))
+```
+
+Because of missing data for some zip codes, there are some NA values. We should know whether those zip codes are populous.
+
+```{r}
+na_zip_income_change <- md_foreclosure_with_zip_pop_housing_income|>
+  filter(is.na(income_change_2011_2021))
+
+na_zip_income_change
+```
+
+These are the locations and populations of the zip codes with no household income data from either 2011 or 2021 (or both); population as of 2019.
+
+-   20612 is in Charles County. Pop. 203. Total intent to foreclose notices: 8.
+
+-   20621 is in St. Mary's County. Pop. 960. Total intent to foreclose notices: 30.
+
+-   20632 is in Charles County. Pop. 432. Total intent to foreclose notices: 4.
+
+-   20674 is in St. Mary's County. Pop. 848. Total intent to foreclose notices: 15.
+
+-   20686 is in St. Mary's County. Pop. 1775. Total intent to foreclose notices: 1.
+
+-   20701 is in Anne Arundel and Howard Counties. Pop. 92. Total intent to foreclose notices: 0.
+
+-   20742 is in Prince George's County (on the UMD Campus). Pop. 6,726. Total intent to foreclose notices: 0.
+
+-   20899 is in Montgomery County. Pop. 295. Total intent to foreclose notices: 0.
+
+-   21071 is in Baltimore County. Pop. 581. Total intent to foreclose notices: 10.
+
+-   21130 is in Baltimore County. Pop. 156. Total intent to foreclose notices: 3.
+
+-   21250 is in Baltimore County. Pop. 495. This is the University of Maryland's Baltimore Campus. Total intent to foreclose notices: 0.
+
+-   21251 is in Baltimore City. Pop. 171. This is part of the Morgan State University Campus. Total intent to foreclose notices: 0.
+
+-   21252 is in Baltimore County. Pop. 2383. This is the campus of Towson University. Total intent to foreclose notices: 0.
+
+-   21522 is in Garrett County. Pop. 233. Total intent to foreclose notices: 0.
+
+-   21644 is in Queen Anne's County. Pop. 90. Total intent to foreclose notices: 2.
+
+-   21669 is in Dorchester County. Pop. 254. Total intent to foreclose notices: 0.
+
+-   21679 is in Queen Anne's and Talbot Counties. Pop. 289. Total intent to foreclose notices: 2.
+
+-   21714 is in Frederick County. Pop. 216. Total intent to foreclose notices: 6.
+
+-   21717 is in Frederick County. Pop. 77. Total intent to foreclose notices: 2.
+
+-   21746 is in Washington County. Pop. 3008. This zip code covers the Maryland State Correctional Institution, Hagerstown and the Roxbury Correctional Institution. Total intent to foreclose notices: 0.
+
+-   21762 is in Frederick County. Pop. 202. Total intent to foreclose notices: 6.
+
+-   21790 is in Frederick County. Pop. 157. Total intent to foreclose notices: 0.
+
+-   21802 is in Wicomico County. Pop. 90. This is a PO box zip code in Salisbury that (for some reason) had a population of 90 as of the 2019 ACS. Total intent to foreclose notices: 6.
+
+-   21862 is in Worcester County. Pop. 90. Total intent to foreclose notices: 2.
+
+-   21867 is in Somerset County. Pop. 23. Total intent to foreclose notices: 2.
+
+-   21890 is in Somerset County. Pop. 2816. This is the zip code for the Eastern Correctional Institution and the Somerset County Detention Center. Total intent to foreclose notices: 0.
+
+-   21916 is in Cecil County. Pop. 44. This is a PO box zip code outside of Elkton that (for some reason) has a population of 44 as of the 2019 ACS. Total intent to foreclose notices: 1.
+
+-   21930 is in Cecil County. Pop. 132. Total intent to foreclose notices: 1.
+
+Now we can assess the 2011-2021 household income changes in the zip codes with the highest per capita intent to foreclose notice rates.
+
+```{r}
+md_foreclosure_with_zip_pop_housing_income <- md_foreclosure_with_zip_pop_housing_income |>
+  filter(!is.na(income_change_2011_2021)) |>
+  arrange(income_change_2011_2021)
+
+md_foreclosure_with_zip_pop_housing_income
+```
+
+```{r}
+md_foreclosure_with_zip_pop_housing_income |>
+  arrange(desc(foreclosure_pc))
+```
+
+The only zip codes that appear in the top ten when sorted by income change from 2011 to 2021 and when sorted by intent to foreclose notices per capita are:
+
+-   Zip code 20618: A zip code in St. Mary's County with a median age of 63 and a lower-than-average median income relative to the California-Lexington Park metropolitan area.
+
+-   Zip code 21543: A zip code in Midlothian, Allegany County with a median age of 66.5 and a lower-than-average median household income relative to the Cumberland metropolitan area.
+
+-   Zip code 21634: A zip code in Dorchester County with a median age of 62 and a lower-than-average median household income for the Cambridge micropolitan area.
+
+But we will also calculate the correlation coefficient for good measure.
+
+```{r}
+correlation_income_change_and_foreclosure_pc <- cor(md_foreclosure_with_zip_pop_housing_income$income_change_2011_2021, 
+                   md_foreclosure_with_zip_pop_housing_income$foreclosure_pc)
+
+correlation_income_change_and_foreclosure_pc
+```
+
+Based on the correlation coefficient (-0.029), there is a very weak negative correlation between change in mean household income between 2011 and 2021 and the per capita rate of intent to foreclose notices in a zip code. Roughly speaking, that means zip codes where incomes declined or grew slowly from 2011 to 2021 were marginally more likely to see higher intent to foreclose notice rates per capita than zip codes with larger increases in mean household income between 2011 and 2021.
+
+For good measure, we made a map of change in income from 2011 to 2021 for comparison to the map of intent to foreclose notice rates per capita. The map leaves zip codes with missing mean household income data blank (white).
+
+```{r}
+ggplot() +
+  geom_sf(data=md_foreclosure_with_zip_pop_housing_income, aes(geometry= geometry, fill=income_change_2011_2021)) +
+  scale_fill_gradientn(
+     colors = c("lightgreen","darkorange", "#A84268"))+
+  theme_minimal()
+```
+
+We can also make a scatterplot of these two variables.
+
+```{r}
+ggplot(md_foreclosure_with_zip_pop_housing_income, aes(x = income_change_2011_2021, y = foreclosure_pc, label = zip)) +
+  geom_point() +
+  geom_text_repel(box.padding = 0.2) +  # Adjust box.padding as needed for label positioning
+  labs(title = "No clear impact of income change from 2011 to 2021 and intent to foreclose notices per capita",
+       x = "Median household income change from 2011 to 2021",
+       y = "Intent to foreclose notices per 1,000 residents")
+```
+
+There is some possibility that income changes over a decade represent too long a timeline to provide a meaningful point of comparison to the number of intent to foreclose notices per capita in a zip code.
+
+We should, therefore, see if there is a stronger correlation between income changes over a shorter period of time and the number of intent to foreclose notices per capita.
+
+```{r}
+# Join 2014 median household income data with the intent to foreclose notice dataset.
+md_foreclosure_with_zip_pop_housing_income <- left_join(md_foreclosure_with_zip_pop_housing_income, md_medhouseholdincome_2014_zip, by=c("zip" = "GEOID")) |> rename(med_householdincome_2014_zip = estimate)
+```
+
+```{r}
+# Create a new column to calculate median household income change from 2014-2021 for each zip code. 
+md_foreclosure_with_zip_pop_housing_income <- md_foreclosure_with_zip_pop_housing_income |> 
+  mutate(income_change_2014_2021 = ((med_householdincome_2021_zip - med_householdincome_2014_zip)/med_householdincome_2014_zip * 100))
+```
+
+We filter out zip codes with missing household income data.
+
+```{r}
+# Filter for NA values in household income change column.
+na_zip_income_change_2014_2021 <- md_foreclosure_with_zip_pop_housing_income|>
+  filter(is.na(income_change_2014_2021))
+```
+
+We check if any zip codes not previously identified in our 2011-2021 comparison are missing income data from 2014. There are none.
+
+```{r}
+# Use anti-join to identify zip codes with NA values that did not appear in the 2011-2021 comparison.
+missing_income_change_2014_2021 <- anti_join(na_zip_income_change_2014_2021, na_zip_income_change, by = "zip")
+
+missing_income_change_2014_2021
+```
+
+```{r}
+# Remove rows with NA values in the median household income change 2014-2021 column. 
+md_foreclosure_with_zip_pop_housing_income <- md_foreclosure_with_zip_pop_housing_income |>
+  filter(!is.na(income_change_2014_2021)) |>
+  arrange(income_change_2014_2021)
+```
+
+```{r}
+# Calculate correlation coefficient.
+correlation_income_change_and_foreclosure_pc_2014_2021 <- cor(md_foreclosure_with_zip_pop_housing_income$income_change_2014_2021, 
+                   md_foreclosure_with_zip_pop_housing_income$foreclosure_pc)
+
+correlation_income_change_and_foreclosure_pc_2014_2021
+```
+
+Based on the correlation coefficient (0.075), there is a very weak positive correlation between change in mean household income between 2014 and 2021 and the number of intent to foreclose notices per capita in a zip code. Roughly speaking, that means zip codes where incomes grew faster from 2014 to 2021 were marginally more likely to see higher intent to foreclose notice rates per capita than zip codes with slow or negative mean household income growth between 2014 and 2021.
+
+This stands in contrast to our earlier correlation calculation using 2011 to 2021 changes in median household income, which found a weak negative correlation.
+
+We do the same correlation calculation once again -- this time with median household income data from 2017, just for good measure.
+
+```{r}
+# Join 2017 median household income data with the intent to foreclose notice dataset.
+md_foreclosure_with_zip_pop_housing_income <- left_join(md_foreclosure_with_zip_pop_housing_income, md_medhouseholdincome_2017_zip, by=c("zip" = "GEOID")) |> rename(med_householdincome_2017_zip = estimate)
+```
+
+```{r}
+# Create a new column to calculate median household income change from 2017-2021 for each zip code.
+md_foreclosure_with_zip_pop_housing_income <- md_foreclosure_with_zip_pop_housing_income |>
+  mutate(income_change_2017_2021 = ((med_householdincome_2021_zip - med_householdincome_2017_zip)/med_householdincome_2017_zip * 100))
+```
+
+We filter out zip codes with missing household income data.
+
+```{r}
+# Filter for NA values in household income change column.
+na_zip_income_change_2017_2021 <- md_foreclosure_with_zip_pop_housing_income|>
+  filter(is.na(income_change_2017_2021))
+```
+
+We check if any zip codes not previously identified in our 2011-2021 comparison are missing income data from 2017.
+
+```{r}
+# Use anti-join to identify zip codes with NA values that did not appear in the 2011-2021 comparison.
+missing_income_change_2017_2021 <- anti_join(na_zip_income_change_2017_2021, na_zip_income_change, by = "zip")
+
+missing_income_change_2017_2021
+```
+
+Six new zip codes are missing data:
+
+-   20606 is in St. Mary's County. Pop. 374. Total intent to foreclose notices: 7.
+
+-   20625 is in Charles County. Pop. 646. Total intent to foreclose notices: 25.
+
+-   20667 is in St. Mary's County. Pop. 633. Total intent to foreclose notices: 9.
+
+-   21153 is in Baltimore County. Pop. 447. Total intent to foreclose notices: 2.
+
+-   21641 is in Caroline County. Pop. 88. Total intent to foreclose notices: 10. This is among the five zip codes with the highest numbers of intent to foreclose notices per capita in Maryland.
+
+-   21866 is in Somerset County. Pop. 48. Total intent to foreclose notices: 1.
+
+```{r}
+# Remove rows with NA values in the median household income change 2017-2021 column. 
+md_foreclosure_with_zip_pop_housing_income <- md_foreclosure_with_zip_pop_housing_income |>
+  filter(!is.na(income_change_2017_2021)) |>
+  arrange(income_change_2017_2021)
+```
+
+```{r}
+# Calculate correlation coefficient.
+correlation_income_change_and_foreclosure_pc_2017_2021 <- cor(md_foreclosure_with_zip_pop_housing_income$income_change_2017_2021, 
+                   md_foreclosure_with_zip_pop_housing_income$foreclosure_pc)
+
+correlation_income_change_and_foreclosure_pc_2017_2021
+```
+
+Based on the correlation coefficient (-0.041), there is a very weak negative correlation between change in mean household income between 2017 and 2021 and the per capita rate of intent to foreclose notices in a zip code. Roughly speaking, that means zip codes where incomes declined or grew slowly from 2017 to 2021 were marginally more likely to see higher intent to foreclose notice rates per capita than zip codes with larger increases in mean household income between 2017 and 2021.
+
+This more closely resembles our initial correlation calculation using median household income changes from 2011 to 2021, though the correlation is still statistically insignificant. The 2017-2021 calculation also excludes one of the five zip codes with the highest number of intent to foreclose notices per capita in Maryland.
+
+As a final step, we can calculate the correlation between a zip code's 2021 median income and the number of intent to foreclose notices per capita.
+
+```{r}
+# Calculate correlation coefficient.
+correlation_income_foreclosure_pc <- cor(md_foreclosure_with_zip_pop_housing_income$med_householdincome_2021_zip, 
+                   md_foreclosure_with_zip_pop_housing_income$foreclosure_pc)
+
+correlation_income_foreclosure_pc
+```
+
+Ultimately, we find little correlation between income change over time and the number of intent to foreclose notices per capita on the zip code level. We also find a weak negative correlation between median household income (as of 2021) and the number of foreclosure notices per capita on the zip code level, though the latter correlation is stronger than the correlation between income **change** and intent to foreclose notices per capita.
+
+### Question 5
+
+Given that residents of several of the zip codes with both high numbers of intent to foreclose notices and negative income growth from 2011 to 2021 have a median age over 60, we should also calculate the correlation between median age and the number of intent to foreclose notices per capita, bearing in mind that our median age data at the zip code level is from 2019.
+
+```{r}
+md_foreclosure_with_zip_pop_and_housing_age <- left_join(md_foreclosure_with_zip_pop_and_housing, md_medage, by=c("zip" = "GEOID")) |> rename(median_age = estimate)
+```
+
+Are we missing median age data for any of the zip codes in our dataset?
+
+```{r}
+na_zip_median_age <- md_foreclosure_with_zip_pop_and_housing_age |>
+  filter(is.na(median_age))
+
+na_zip_median_age
+```
+
+We are missing median age data for zip code 21867 in Somerset County. This is another PO mailbox with a listed population (as of the 2019 ACS) of 23. Total intent to foreclose notices: 2.
+
+```{r}
+# Remove rows with NA values in the median age column. 
+md_foreclosure_with_zip_pop_and_housing_age <- md_foreclosure_with_zip_pop_and_housing_age |>
+  filter(!is.na(median_age))
+```
+
+Now we can calculate the correlation coefficient.
+
+```{r}
+# Calculate correlation coefficient.
+correlation_median_income_foreclosure_notices_pc <- cor(md_foreclosure_with_zip_pop_and_housing_age$median_age, 
+                   md_foreclosure_with_zip_pop_and_housing_age$foreclosure_pc)
+
+correlation_median_income_foreclosure_notices_pc
+```
+
+A correlation coefficient of 0.18 suggests a weak positive correlation between the median age of a zip code and the number of intent to foreclose notices per capita in that zip code. In other words, a zip code with a median age of 65 is marginally more likely to see a higher number of intent to foreclose notices per capita than a zip code with a median age of 40.
+
+### Question 6
+
+Is there any relationship between homeownership rate and foreclosures per capita on the zip code level?
+
+We return to our dataframe that includes only zip code-level population and housing ownership/debt data. We need two different measurements for the sake of thoroughness: The percentage of all housing units that are owner-occupied and the percentage of all units that carry a mortgage or similar debt.
+
+```{r}
+md_foreclosure_with_zip_pop_and_housing <- md_foreclosure_with_zip_pop_and_housing |>
+  mutate(pct_owner_occupied = (total_owner_units/total_housing_units)*100,
+         pct_debt_units = (total_debt_units/total_housing_units)*100)
+  
+```
+
+We find all instances in which a zip code has residents but no recorded housing units, which return a null value when calculating the percentage of all units that are owner-occupied or that carry a mortgage or similar debt.
+
+```{r}
+md_foreclosure_with_zip_pop_and_no_housing <- md_foreclosure_with_zip_pop_and_housing |>
+  filter(total_housing_units == 0)
+
+md_foreclosure_with_zip_pop_and_no_housing
+```
+
+The following zip codes have recorded populations but no recorded housing units:
+
+-   21250: Baltimore County. This is the campus of the University of Maryland's Baltimore Campus.
+
+-   21251: Baltimore City. This is part of the campus of Morgan State University.
+
+-   21252: Baltimore County. This is the campus of Towson University.
+
+-   21746: Washington County. This zip code covers the Maryland State Correctional Institution, Hagerstown and the Roxbury Correctional Institution.
+
+-   21802: Wicomico County. This is a PO box zip code in Salisbury that (for some reason) had a population of 90 as of the 2019 ACS. The intent to foreclose notice dataset lists 6 foreclosures at this zip code.
+
+-   21890: Somerset County. This is the zip code for the Eastern Correctional Institution and the Somerset County Detention Center. 21916: Cecil County. This is a PO box zip code outside of Elkton that (for some reason) has a population of 44 as of the 2019 ACS. The intent to foreclose notice dataset lists one intent to foreclose notice at this zip code.
+
+We then filter the larger dataset to exclude those zip codes with no recorded housing units.
+
+```{r}
+md_foreclosure_with_zip_pop_and_housing <- md_foreclosure_with_zip_pop_and_housing |>
+  filter(total_housing_units != 0)
+```
+
+We calculate the correlation between the percentage of all units that are owner-occupied and the per capita rate of intent to foreclose notices by zip code:
+
+```{r}
+correlation_owner_occupied_foreclosure_pc <- cor(md_foreclosure_with_zip_pop_and_housing$pct_owner_occupied, 
+                   md_foreclosure_with_zip_pop_and_housing$foreclosure_pc)
+
+correlation_owner_occupied_foreclosure_pc
+```
+
+There is a weak negative correlation between the percentage of all units that are owner-occupied and the per capita rate of intent to foreclose notices by zip code. Roughly speaking, that means zip codes with lower rates of homeownership are marginally more likely to have higher per capita rates of intent to foreclose notices.
+
+We then calculate the correlation between the percentage of all units that carry a mortgage or similar debt and the per capita rate of intent to foreclose notices by zip code:
+
+```{r}
+correlation_debt_units_foreclosure_pc <- cor(md_foreclosure_with_zip_pop_and_housing$pct_debt_units, 
+                   md_foreclosure_with_zip_pop_and_housing$foreclosure_pc)
+
+correlation_debt_units_foreclosure_pc
+```
+
+There is a weak negative correlation between the percentage of all units that carry a mortgage or similar debt and the per capita rate of intent to foreclose notices by zip code. Roughly speaking, that means zip codes where fewer property owners have mortgages or similar debts are marginally more likely to have higher per capita rates of intent to foreclose notices.
+
+This result is more unexpected, though it does align with the previous finding that homeownership rates do not positively correlate with intent to foreclose notice per capita rates.
+
+### Question 7
+
+Is there any relationship between the rate of foreclosures notices per capita and the mean assessed property value in a zip code?
+
+First, we read in the CSV of mean assessed property values by zip code from the Maryland Department of Assessment and Taxation (consolidated by Derek Willis).
+
+```{r}
+mean_assessed_property_value_zip_code <- read_csv("foreclosure_dataset/zip_means.csv", guess_max = 4497)
+```
+
+Now we join the mean assessed property values by zip code with the larger dataframe that includes foreclosure notices per capita, including for zip codes that did not have household income data from 2011 to 2021 and excluding zip codes with no mean assessed property value data.
+
+```{r}
+md_foreclosure_with_assessed_property_value <- left_join(md_foreclosure_with_zip_pop, mean_assessed_property_value_zip_code, by=c("zip" = "zipcode")) |>
+  filter(!is.na(mean_assessment))
+```
+
+Calculating the correlation between mean assessed property value and intent to foreclose notice rate per capita for *all* zip codes.
+
+```{r}
+correlation_mean_assessed_property_value_and_foreclosure_pc <- cor(md_foreclosure_with_assessed_property_value$mean_assessment, 
+                   md_foreclosure_with_assessed_property_value$foreclosure_pc)
+
+correlation_mean_assessed_property_value_and_foreclosure_pc
+```
+
+In this case, there is very weak negative correlation between the mean assessed property value and the intent to foreclose notice rate per capita in a zip code. Roughly speaking, that means that zip codes with lower mean assessed property values are marginally more likely to have higher-than-average intent to foreclose notice rates per capita.
+
+## Updated DataWrapper Map:
+
+<https://datawrapper.dwcdn.net/nwfQ6/3/>
+
+## Memo - Dec. 9, 2023
+
+### The Lede
+
+Maryland ended its pandemic-era foreclosure moratorium in June 2021. In the following months, thousands of Maryland homeowners and landlords received notices of intent to foreclose from lenders, with monthly totals surging from fewer than 1,000 in July 2021 to a high of more than 6,500 in January 2023.
+
+```{r}
+monthly_foreclosure_totals_bar
+```
+
+Those notices have been most concentrated in suburban zip codes east and south of DC, particularly in Charles County, as well as in parts of the Eastern Shore and greater Baltimore. In the map below, zip codes in which the number of intent to foreclose notices per 1,000 residents was higher than the state average are shaded; zip codes with per capita figures below the state average are omitted.
+
+```{r}
+md_notice_dif_state_mean_log_plot
+```
+
+### Data Source and Caveats
+
+We conducted this analysis using a dataset maintained by Maryland's Department of Finance listing the number of intent to foreclose notices issued by month in each Maryland zip code from July 2021 to October 2023. To connect these numbers to demographic trends, we joined this dataset with zipcode-level Census data from the 2019 American Community Survey. There are, of course, caveats to our analysis:
+
+1.  While Maryland's Department of Labor -- notably not the Department of Finance -- identifies the state's foreclosure data as residential property-specific, the Department of Finance dataset does not indicate whether housing units subject to intent to foreclose notices are owner-occupied, vacation homes or rental homes. Without that information, **we can't infer whether the post-pandemic surge in foreclosure notices impacted renters or homeowners more.**
+
+2.  The Department of Finance dataset includes data for dozens of non-Maryland zip codes. Those include zip codes in Delaware and Virginia that may represent mailing addresses of people who own properties in Maryland, as well as dozens of zip codes that either represent international addresses or data entry errors. **We did not consider these out-of-state zip codes in our analysis,** though we did identify the location of each zip code and the number of intent to foreclose notices associated with it.
+
+3.  **The Department of Finance dataset includes data for PO box zip codes, which by definition cannot represent residential properties** -- only the mailing addresses of property owners to whom notices of intent to foreclose were issued. We did not filter these zip codes out of the dataset by default, though we filtered out some in the process of joining the Department of Finance dataset with other datasets. American Community Survey data, which we relied on for population, demographic, income and homeownership data, includes population estimates for some PO box zip codes.
+
+4.  **We relied on the 2019 ACS as the most recent source of zip code-level population estimates** for, among other things, our calculations of intent to foreclose notices per capita. The 2019 ACS does not include population estimates for five standard Maryland zip codes, including zip code 20656: the small St. Mary's County community of Loveville, which -- [according to 2021 ACS data accessed through CensusReporter](https://censusreporter.org/profiles/86000US20656-20656/) -- has roughly 84 residents. The zip code has a mostly Black population, with a median household income half as large as the nearby California-Lexington Park metropolitan area and a median age of 60. The Department of Finance dataset lists 11 intent to foreclose notices sent to the 20656 zip code. **If we were to use the 2021 ACS population estimate for the zip code, 20656 would have one of the highest rates of foreclosure notices in Maryland.**
+
+5.  **We opted not to analyze zip codes which had fewer than 20 residents as of the 2019 ACS** to avoid including those zip codes in the upper threshold of our intent to foreclose notice per capita measurements because of a notice. That said, the Department of Finance dataset lists only two zip codes with populations below 20 as of the 2019 ACS associated with intent to foreclose notices. One is a PO box zip code; the other is a zip code in Dorchester County adjacent to a slightly larger zip code that, according to our calculations, has seen the highest number of intent to foreclose notices per capita since June 2021.
+
+6.  Our calculations of the correlation between the number of intent to foreclose notices per capita and change in median household income, homeownership status and mortgage status require **filtering out foreclosure notice data from zip codes that did not have ACS** **data** on income, homeownership or mortgage status in either 2011, 2014, 2017, 2019 or 2021 (depending on the variable). Some of those zip codes cover small residential neighborhoods that are relevant to our analysis; others cover institutions like universities and prisons that are not relevant to our analysis.
+
+7.  Our analysis of the correlation between median property value and the number of intent to foreclose notices per capita by zip code relies on a state database of assessed property values aggregated by zip code. The database provides the mean assessed value of all assessed properties in a zip code, which could include commercial properties not relevant to our analysis.
+
+### Main Findings
+
+With those caveats in mind, we interpret our findings as follows:
+
+Our per capita calculations draw attention to two distinct regional trends in intent to foreclose notices, that deal with heightening climate change or excessive lending practices during the pandemic.
+
+**The first centers on Crapo in Dorchester County:** A small bay shore community with little more than a post office that saw the highest number of intent to foreclose notices per capita in Maryland over the past two and a half years, with roughly one foreclosure notice for every four residents.
+
+A bar graph of intent to foreclose notices by month in zip code 21626 (Crapo) shows that the community received its first post-pandemic intent to foreclose notices in August 2022. Those notices came roughly 10 months after severe flooding cut off the community from the rest of Dorchester County for several days in November 2021. (<https://www.myeasternshoremd.com/dorchester_star/news/flooding-recovery-efforts-underway-in-dorchester-help-available/article_47c9d0ca-13d9-5c6d-bd49-5fc2b07f967c.html>)
+
+```{r}
+crapo_monthly_foreclosure_chart
+```
+
+Crapo is the most dramatic example, but several other bayshore communities south of Cambridge have also seen significant numbers of foreclosure notices per capita since 2021. The concentration of notices in that part of the Eastern Shore -- a region increasingly vulnerable to coastal flooding -- suggests a connection between recent floods and intent to foreclose notices. One possibility is that homeowners' insurance premiums have skyrocketed in the wake of recent floods and storms, making it difficult for residents to keep pace with mortgage payments. Based on more recent median household income and median age data, residents of Crapo and nearby communities are often older and lower-income than the median Maryland resident, likely limiting their ability to recover from flooding and pay for rising insurance costs.
+
+It would be worthwhile to reach out to real estate brokers and county-level elected officials in Dorchester County to get a better sense of who owns property in bayshore communities like Crapo, whether many homeowners in the area refinanced their homes in recent years, and whether the county is re-considering whether to purchase and demolish flood-prone properties -- [a prospect the county has considered in the past](https://www.baltimoresun.com/2020/08/19/marylands-dorchester-county-is-washing-away-leaving-its-residents-with-hard-choices/), according to reporting from the Baltimore Sun.
+
+**The other trend is epitomized by Whiteplains in Charles County**: A majority Black suburban community with a median household income higher than the average for the Washington metropolitan area. Over the last decade, wealthy Black Marylanders have been moving out of Prince George's County into Charles County to access more affordable homes, according to [reporting from NBC4](https://www.nbcwashington.com/discover-black-heritage/the-next-migration-prince-georges-county-wealth-shifts-to-charles-county/3283977/).
+
+A bar graph of intent to foreclose notices by month in Whiteplains roughly matches the statewide trend between July 2021 and October 2023, albeit at a far higher per capita rate.
+
+```{r}
+whiteplains_monthly_foreclosure_chart
+```
+
+Much of Charles County, along with parts of Prince George's and St. Mary's Counties to the east and south of Washington, DC, have seen similar increases in intent to foreclose notices per capita since the end of the pandemic-era moratorium. The slight lag in notices may be connected to pandemic-era mortgage assistance programs, and the higher-than-average number of notices per capita may reflect unscrupulous lending practices in the real estate market during the pandemic.
+
+We should not, of course, get ahead of ourselves -- our explanation for the trend is purely conjecture. That said, given the recent growth and demographic shifts in the southern Maryland suburbs, it would be worthwhile to speak with homeowners, real estate brokers, lenders, county officials and state regulators about the southern Maryland real estate market during and after the pandemic.
+
+There are other localized trends worth investigating, including higher-than-average numbers of foreclosure notices per capita in and around Baltimore, in some parts of western Maryland, including near Hagerstown and Frostburg, and in Caroline County.
+
+Though there is not yet enough data to draw firm conclusions about cycles or patterns, data from 2022 and 2023 indicates that the number of intent to foreclose notices issued to Maryland property owners may rise and fall on a quarterly basis.
+
+### Correlation Analyses
+
+We conducted a slate of correlation analyses to see if there was any statistical relationships between intent to foreclose notices and demographic data on income and housing. **We found only weak correlations between all data points, revealing that there may be other, stronger forces at play for these foreclosure notice trends.**
+
+Though it seems intuitive to assume there might be a relationship between the lasting impact of the 2008 recession and the number of foreclosure notices per capita post-pandemic at the zip code level, there is surprisingly little correlation between income change from 2011 to 2021 (the largest available range of post-2008 ACS median household income data) and the number of intent to foreclose notices per capita in a zip code. Even when we calculate the correlation between income changes over shorter periods (2014-2021 and 2017-2021), the statistical relationship appears weak.
+
+There is a slightly stronger negative correlation between income and the number of intent to foreclose notices per capita -- meaning lower-income zip codes were slightly more likely to see higher numbers of intent to foreclose notices per capita.
+
+Similarly, there is little correlation between homeownership rate, the percentage of housing units subject to mortgages, or mean property values and the number of intent to foreclose notices per capita on the zip code level.
+
+Though there is not a strong correlation between median age and the number of intent to foreclose notices per capita on a zip code level, three of the zip codes with both the most significant declines in income from 2011 to 2021 and highest numbers of foreclosure notices per capita are low-income communities with median ages in the mid-60s.
+
+### Data Verification
+
+With the limitations (addressed at the top) in mind, we anticipate these findings to be replicable. The data we used in our investigation is publicly available, as it was provided by the State of Maryland and the Census Bureau. Some data cleaning would be necessary before joining the foreclosure notice data with other data sets --- for example, pivoting columns, turning date columns into date data types, and calculating total foreclosure notices per zip code and per capita rate. Before publication, we would advise confirming numbers and data definitions with the Maryland Department of Finance.
+
+### The Kicker
+
+Also notable, if only out of curiosity: According to the Department of Finance dataset, a single intent to foreclose notice was sent to the zip code for the federal Department of Commerce building in Washington, DC in August 2023.
