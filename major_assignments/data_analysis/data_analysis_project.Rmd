@@ -65,7 +65,7 @@ clergy_totals
 ## Searching for the top donors in the md_campaign database 
 ```{r}
 d_cowan_state <- md_campaign |> 
-  filter(contributor_first_name == "DORIS", contributor_last_name == "COWAN")
+  filter(contributor_first_name == "DORIS", contributor_last_name == "COWAN") 
          
 j_price <- md_campaign |> 
   filter(contributor_first_name == "JOHN", contributor_last_name == "PRICE")
@@ -92,24 +92,48 @@ Of the top ten clergy members, the majority of them appear in the Maryland campa
 Another thing that I find interesting is that majority of these clergy members have donated to Maryland campaigns, even if it was only once. I find this interesting because we often assume those within the church environment do not affiliate themselves with politics of any sort. Another interesting factor is that these members have only contributed to campaigns within the last few years, 2024-2026, which could possibly suggest that these clergy members are becoming more politically active as the nation becomes increasingly politically polarized. 
 
 
-# Joining Cowan contributions  
+# Creating Cowan dataframes for state and federal contributions + making a bar chart 
+
+ 
+
+```{r}
+
+d_cowan_state <- d_cowan_state |>
+  mutate(contributor_name = paste(contributor_last_name, contributor_first_name, sep = ", ")) |>
+  rename(contribution_receipt_amount = transaction_amount,
+         contribution_receipt_date = transaction_date)
+```
+
 ```{r}
 cowan_federal <- clergy_contribs_combined |> 
-  filter(contributor_name == "COWAN, DORIS") 
+  filter(contributor_name == "COWAN, DORIS") |> 
+  select(contributor_name, contribution_receipt_amount)
 
+cowan_comparison <- bind_rows(
+  cowan_federal |>
+    summarise(total_amount = sum(contribution_receipt_amount)) |>
+    mutate(source = "Federal"),
+  d_cowan_state |>
+    summarise(total_amount = sum(contribution_receipt_amount)) |>
+    mutate(source = "State")
+)
 
-
-
+cowan_comparison |>
+  ggplot(aes(x = source, y = total_amount)) +
+  geom_col(fill = "lightpink") +
+  coord_flip() +
+  scale_y_log10() +
+  theme_fivethirtyeight() +
+  labs(
+    title = "How One Clergy Member Allocated Maryland Political Contributions",
+    x = "Contribution Source",
+    y = "Total Contributions"
+  ) +
+  theme(
+    plot.title = element_text(size = 13, face = "bold")
+  )
 ```
 
-
-
-
-
-```{r}
-d_cowan <- d_cowan |> mutate(contributor_name = paste(contributor_last_name, contributor_first_name, sep=", ")) |> rename(contribution_receipt_amount = transaction_amount,
-       contribution_receipt_date = transaction_date) 
-```
 
 
 
@@ -128,20 +152,12 @@ clergy_contribs_combined_with_parties <- clergy_contribs_combined |>
 
 clergy_contribs_combined_with_parties |> 
   group_by(party) |> 
-  summarise(total_amount = sum(contribution_receipt_amount, na.rm = TRUE)) |>
+  summarize(total_amount = sum(contribution_receipt_amount, na.rm = TRUE)) |>
   arrange(desc(total_amount))
 
 
 ```
-```{r}
-clergy_contribs_combined_with_parties |>
-  ggplot() +
-  geom_bar(aes(x=party, weight=total_amount))
-```
-
-
-
-
+Since Maryland is a democratic state, the results for the total amounts contributed to democratic versus republican committees make sense. 
 
 
 
@@ -156,50 +172,68 @@ top_cities <- clergy_contribs_combined |>
   filter(total_amount > 1500.00)
 top_cities
 
+```
+
+```{r}
 write_csv(top_cities, "top_cities.csv")
 
 top_cities <- read_csv("top_cities.csv")
 ```
 
 
+Say that you used chat to get the columns right lmao 
+
 ```{r}
-md_cities_pop <- get_acs(
+md_cities <- get_acs(
   geography = "place",
-  variables = c(population = "B01001_001"),
-              year = 2021,
-              state = "MD",
-              geometry = TRUE)
+  variables = c(
+    median_income = "B19013_001",
+    population = "B01003_001"
+  ),
+  year = 2021,
+  state = "MD",
+  geometry = TRUE
+) |>
+  select(NAME, variable, estimate, geometry) |>
+  pivot_wider(
+    names_from = variable,
+    values_from = estimate
+  )
 ```
 
 
 
 ```{r}
-md_cities_pop <- md_cities_pop |>
-  mutate(NAME = str_to_title(str_remove_all(NAME, ", Maryland"))) |> 
-  mutate(NAME = str_to_upper(NAME)) |> 
-  mutate(NAME = str_remove_all(NAME, " CDP")) |> 
-  mutate(NAME = str_remove_all(NAME, " TOWN")) |> 
+md_cities <- md_cities |>
+  mutate(NAME = str_to_title(str_remove_all(NAME, ", Maryland"))) |>
+  mutate(NAME = str_to_upper(NAME)) |>
+  mutate(NAME = str_remove_all(NAME, " CDP")) |>
+  mutate(NAME = str_remove_all(NAME, " TOWN")) |>
+  mutate(NAME = str_remove_all(NAME, " CITY")) |>
+  mutate(NAME = str_remove_all(NAME, " VILLAGE")) |>
   mutate(NAME = trimws(NAME))
 ```
 
-** my idea here was to get the geography for Maryland cities from the tidycensus, then join that to the clergy contributions data to create a map of the places that had the highest to lowest contributions. The intended goal was ultimately to create a map like we did in lab 10; however, the census data for cities is a little tricky. For example, I first removed the CDP and ,Maryland from the cities and upper cased all of the city names. Still, I do not think I would be able to join this dataframe to the contributions dataframe correctly, but I will put my attempt below. 
+
 
 ##Combining the top cities dataframe with the md_cities_pop dataframe. 
 
 ```{r}
-md_city_contribs <- md_cities_pop |>
+md_city_contribs <- md_cities |>
   inner_join(top_cities, join_by(NAME == contributor_city)) |> 
-  mutate(contribs_rate = total_amount/estimate*10000) |> 
-  arrange(desc(total_amount))
+  mutate(contribs_rate_pop = total_amount/population*10000,
+         contribs_rate_income = total_amount/median_income*10000) |> 
+  arrange(desc(total_amount)) 
 
 top_cities |>
-  anti_join(md_cities_pop, join_by(contributor_city == NAME))
+  anti_join(md_cities, join_by(contributor_city == NAME))
 
 ```
 
 
 ##Making Map  
 
+For this section, I got the outline for Maryland counties, using the counties <- counties() to get all U.S. counties, then filtered for Maryland only counties in the following line. Then, I created a map using the weight as the total_amount from the md_city_contribs dataframe. This provided a map of the cities that have contributed the most to least within the state of Maryland. 
 ```{r}
 counties <- counties()
 
@@ -209,13 +243,33 @@ md_counties <- counties |>
 
 ggplot() +
   geom_sf(data=md_counties) + 
-  geom_sf(data=md_city_contribs, aes(fill=total_amount)) +
+  geom_sf(data=md_city_contribs, aes(fill=contribs_rate_pop)) +
   theme_minimal() +
-  scale_fill_viridis_b(option="magma",trans = "log")
+  scale_fill_viridis_b(option="magma",trans = "log") + 
+  labs(title = "Maryland Clergy Contributions by population")
+```
+```{r}
+counties <- counties()
+
+md_counties <- counties |>
+  filter(STATEFP == "24")
+
+
+ggplot() +
+  geom_sf(data=md_counties) + 
+  geom_sf(data=md_city_contribs, aes(fill=contribs_rate_income)) +
+  theme_minimal() +
+  scale_fill_viridis_b(option="magma",trans = "log") + 
+  labs(title = "Maryland Clergy Contributions by income")
 ```
 
 
 
+
+
+ 
+
+Map is concentrated in the suburban/urban areas of Maryland, mainly around Prince George's County, Montgomery County and Baltimore. 
 
 
 
