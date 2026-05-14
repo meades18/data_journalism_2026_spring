@@ -159,9 +159,6 @@ cowan_comparison |>
   )
 ```
 
-
-
-
 Next, I want to look at party affiliations based on the committee that the clergy member contributed to. Using a database from Joe Wicke, each committee is assigned either a D or R. In this dataframe, there are 255 rows and 3 columns. 
 
 #Loading in data that has the committee party affiliations 
@@ -195,6 +192,41 @@ price_party_contribs <- clergy_contribs_combined_with_parties |>
 
 fraser_party_contribs <- clergy_contribs_combined_with_parties |> 
   filter(contributor_name == "FRASER, ALEXA")
+
+
+cowan_party_contribs |>
+  summarise(
+    total_contributed = sum(contribution_receipt_amount, na.rm = TRUE),
+    num_contributions = n(),
+    avg_contribution = mean(contribution_receipt_amount, na.rm = TRUE),
+    median_contribution = median(contribution_receipt_amount, na.rm = TRUE)
+  )
+
+```
+
+In the following code block, I created a new dataframe that totaled up the amount contributed for each two year transaction period. Looking at the results, my original hypothesis seems to be true that political contributions soared from 2022 to 2024. This could suggest increased political activity for Cowan during the 2024 election cycle. 
+
+```{r}
+cowan_contribs_aggregate <- cowan_party_contribs |>
+  group_by(two_year_transaction_period) |>
+  summarise(total = sum(contribution_receipt_amount, na.rm = TRUE))
+
+cowan_contribs_aggregate
+```
+
+In this section of code, I plotted the results from the above code section. This allowed me to visually interpret the results of my code. 
+
+```{r}
+cowan_contribs_aggregate |>
+  ggplot() +
+  geom_line(aes(x=two_year_transaction_period, y=total)) +
+  geom_point(aes(x=two_year_transaction_period, y=total)) +
+  theme_minimal() +
+  labs(
+    title="A Baltimore Clergymember's political contributions over time",
+    x = "year",
+    y = "total contributions"
+  )
 ```
 
 
@@ -213,7 +245,7 @@ top_cities
 
 ```
 
-In order to join my database, I needed to clean up the top cities so that I could join them later with the Maryland census tract data in order to create a map. This included removing city from some of the names and anything else that was necessary. 
+In order to join my database, I needed to clean up the top cities so that I could join them later with the Maryland census tract data in order to create a map. This included removing city from some of the names and anything else that was necessary. In this dataframe, there are 93 rows and 3 columns. 
 
 ```{r}
 write_csv(top_cities, "top_cities.csv")
@@ -277,7 +309,7 @@ top_cities |>
 ```
 
 
-##Making Map  
+##Making Maps  
 
 In the following code block, I created a map to display my results from the above sections. First, I got the every county within the US, then filtered that dataframe to find only the Maryland counties. This would allow me to have a Maryland outline for my map. Then, I created the map using ggplot and geom_sf, using the md_counties data for the outline, then the md_city_contribs as the actual data to pull from, and filled the cities by the contribution rate by population. I did the same steps for the contributions by median income level as well for a comparison of the two. 
 
@@ -292,9 +324,13 @@ ggplot() +
   geom_sf(data=md_counties) + 
   geom_sf(data=md_city_contribs, aes(fill=contribs_rate_pop)) +
   theme_minimal() +
-  scale_fill_viridis_b(option="magma",trans = "log") + 
+  scale_fill_viridis_b(option="magma",trans = "log10") + 
   labs(title = "Maryland Clergy Contributions by population")
 ```
+The spatial distribution suggests clergy political giving is driven by concentrated donor activity rather than broad-based participation. Many of the political contributions are concentrated in the urban/suburban areas of Maryland, such as Prince George's County, Montgomery County and Baltimore. 
+
+
+
 
 ```{r}
 counties <- counties()
@@ -307,17 +343,48 @@ ggplot() +
   geom_sf(data=md_counties) + 
   geom_sf(data=md_city_contribs, aes(fill=contribs_rate_income)) +
   theme_minimal() +
-  scale_fill_viridis_b(option="magma",trans = "log") + 
+  scale_fill_viridis_b(option="magma",trans = "log10") + 
   labs(title = "Maryland Clergy Contributions by income")
 ```
 
+The highest contribution-to-income tract in Maryland corresponds to the residence area of the dataset’s largest clergy donor, Doris Cowan, suggesting that spatial variation in clergy political giving is driven in part by a small number of high-volume contributors.
+
+
+#Memo 
+
+** Summary of results ** 
+
+Across clergy donors identified in Maryland campaign finance data and federal clergy contributions from 2018–2024, an analysis of the clergy-related political contributions suggests that political giving is highly concentrated both geographically and individually. 
+
+Clergy contributions relative to median income are highly concentrated in urban areas, such as Baltimore exhibiting the highest contribution rate. Correspondingly, the top clergy member identified in the subset of clergy donors who contributed to federal and state campaigns resides in Baltimore, which could possibly skew the results of this analysis. 
+
+Doris Cowan, a retired clergy member from the Presbytery of Baltimore, has far outnumbered other top clergy members that were identified in both the clergy contributions data and Maryland campaign contributions data. On the federal level, this individual has contributed over 6,000 times and 25 times on the state level, donating exclusively to democratic committees and organizations. Compared to other clergy member contributions, Cowan is a clear outlier in the data in contribution frequency and the total amount of money contributed. This donor exhibits unusually high donation frequency, suggesting sustained and repeated political engagement over time in comparison to the other clergy members within the identified subset. 
+
+Cowan, like many of the other top clergy members identified within the subset, donated almost exclusively to federal campaign and committee efforts, which could suggest that there is more political activism on the national level in comparison to the state level. For example, John Price, who shows up quite a few times in the clergy contributions data, but only shows up 1 time in the Maryland campaign contribution data. This trend is followed throughout other top clergy contributors. Furthermore, much like Cowan, the clergy contributors that were identified in the subset also exclusively donated to democratic committees and organizations. 
+
+Another interesting factor is that many of the top clergy contributors are donating on the federal level, rather than the state level, and these contributions have increased over time with more contributions given during the 2024 election cycle compared to previous years. Additionally, I think there could be a story made here about the clergy contributors that donate to republican efforts, and how they combat the amount of donations given to the other side. 
+
+These findings suggest that clergy member contributions within the analyzed subset are not evenly distributed across Maryland, but instead concentrated among a small number of highly active donors located in urban political centers. Essentially, the story here could be that Doris Cowan is a frequent contributor to federal campaign efforts, especially in 2024, giving to democratic committees only. The federal political contributions made by clergy members are based on repeated, high-frequency small donations from a single individual. The story would look into how this one clergy member has contributed over the years and the behavioral intensity, where the political engagement is reflected in small donations. 
+
+** Strengths and Limitations of my results and data** 
+
+# Strengths 
+
+I would say there are several strengths that can be identified within my data. The main strength is that my data are directly from state and federal political contribution records rather than self-reported data, eliminating the potential self-reporting bias. This allows me to achieve high data reliability. Since I have combined two dataframes to find my results, I would also say that this adds to the reliability of my results, in which the combined datasets allow me to identify overlapping contributors to analyze, rather than a simple analysis of the clergy contribution data. Beyond identifying the overlapping members in my subset, I also identified an outlier in my data. 
+
+#Limitations
+
+There are also several limitations that can be identified within my analysis. As mentioned above, there was a clear outlier in the data, which has skewed the results for my analysis of clergy contributions made relative to median income level. Doris Cowan, the outlier, has potentially skewed the results which may disproportionately shape the conclusions drawn from my analysis. Furthermore, it is important to note that the contributions made by Doris Cowan are in small increments ($10) over a seven year period, which suggests there may be an automated payment for re-contributing. This factor changes the result of my analysis from looking at the dollar amount given to looking at the amount of times this donor has contributed. Noteably, the results of my code are based on a small subset of clergy contributors, filtering two datasets to find the overlap; therefore, there can not be general conclusions drawn about clergy political behavior. Lastly, the conclusions about Baltimore need to be handled cautiously because that is the residence of Cowan, so the results of my map will be skewed to represent them in the data. 
+
+** Next Steps ** 
+
+To verify my results, I need to replicate my findings, following the same process I did in order to confirm these results are accurate and reliable. I think to check some of the patterns, such as the political contributions being concentrated in Baltimore, it would be best to replicate my steps using the top five clergy contributors and the top 25 clergy contributors. This would allow me to see if there is still an individual concentration of payments and whether there is still a trend of contributing to democratic committees. Then, it would be important to reach out directly to Doris Cowan to understand her political behavior and confirm that these payments are known and intentional. Additionally, I think it would be important to reach out to some of the committees to confirm receipt transactions, such as ACTBLUE that has received the bulk of donations from clergy members. Lastly, it would be important to speak with experts in campaign finance data, such as political scientists. 
 
 
 
 
- 
 
-Map is concentrated in the suburban/urban areas of Maryland, mainly around Prince George's County, Montgomery County and Baltimore. 
+
 
 
 
